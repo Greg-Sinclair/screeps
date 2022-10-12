@@ -24,9 +24,16 @@ var roleUnloader = {
     //move to flag, delete it on arrival
     if (creep.memory.setup == true && creep.memory.flag){
       var flag = creep.room.find(FIND_FLAGS, {filter: {name:creep.memory.flag}})[0]
-      if (creep.pos.x == flag.pos.x &&creep.pos.y == flag.pos.y){
+      if (!flag){
+        // flag has disappeared for some reason, reset self
+        creep.memory.setup = false;
         creep.memory.flag = null;
-        flag.remove();
+        return;
+      }
+      if (creep.pos.x == flag.pos.x &&creep.pos.y == flag.pos.y){
+        creep.memory.onSite = true;
+        // creep.memory.flag = null;
+        // flag.remove();
       }
       else{
         creep.moveTo(flag.pos, { visualizePathStyle: { stroke: "#ffaa00" } });
@@ -34,7 +41,7 @@ var roleUnloader = {
       }
     }
     //is now at flag, stay there
-    if (creep.memory.setup == true && creep.memory.flag == null){
+    if (creep.memory.setup == true && creep.memory.onSite == true){
       if (creep.upgradeController(creep.room.controller) == -6){
         if (creep.memory.idle < 100){
           creep.memory.idle++;

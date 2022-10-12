@@ -7,10 +7,10 @@ var spawnCreepsDynamically = {
       return;
     }
     //check whether it's necessary to panic-spawn some small mobile harvesters
-    if (spawner.store[RESOURCE_ENERGY] >= 250){
-      checkPanicSpawn(spawner);
+    // if (spawner.store[RESOURCE_ENERGY] >= 250){
+    //   checkPanicSpawn(spawner);
       
-    }
+    // }
     
     //2 cases: use all capacity to spawn a creep for a certain role
     //or panic-spawn some creeps to get things rolling
@@ -51,43 +51,76 @@ function chooseCreepToSpawn(spawner){
   //if there aren't carriers running, spawn mobile harvesters. otherwise convert the existing ones into mobile builders
 
 //proceeding through this linearly doesn't work since it relies on a given type being maxed out when what's really needed is a good average
-  var counts = [];
+  var counts = {};
   //counts number of starting types (loader, carrier, unloader, mobile builder) to decide which to spawn. weighted because there should be 2 carriers per loader. add new types if necessary.
-  counts.push(spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length);
-  counts.push(spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length / 2);
-  counts.push(spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length);
-  counts.push(spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length);
-  var min = Math.min(...counts);
+  counts['loader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length;
+  counts['carrier'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length / 2;
+  counts['unloader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length;
+  // counts['builderMobile'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length;
+  // var min = Math.min(...Object.values(counts));
+  var min = _.min(Object.values(counts));
+  console.log(Object.values(counts))
 
-  //priority logic if there aren't a lot of each type
-  if (min < 5){
-    if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length <= min){
+  if (min <= 3){
+    if (counts['loader'] < min+1){
       trySpawnLoader(spawner);
       if (done) return;
     }
-    if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length / 2 <= min){
-      trySpawnCarrier(spawner);
-      if (done) return;
-    }
-    if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length <= min){
+    if (counts['unloader'] < min+1){
       trySpawnUnloader(spawner);
       if (done) return;
     }
-    // if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length <= min){
-    //   trySpawnMobileBuilder(spawner);
-    //   if (done) return;
-    // }
+    if (counts['carrier'] < min+1){
+      trySpawnCarrier(spawner);
+      if (done) return;
+    }
   }
-  //priority for if there are a lot of each type already
-  trySpawnCarrier(spawner);
-  if (done) return;
-  trySpawnUnloader(spawner);
-  if (done) return;
-  trySpawnLoader(spawner);
-  if (done) return;
-  // trySpawnMobileBuilder(spawner)
+
+  // the above implementation is decent to a point, but once there are a decent number decide which to spawn based on their workloads as well as incorporating builders (can be pushed below). unsure counts even really matters now though
+  // counts['builderMobile'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length;
+  // min = _.min(Object.values(counts));
+  let loaders = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}});
+  console.log(loaders.length)
+  let loaderAvg = 0;
+  loaders.forEach(function(loader){
+    console.log(loader.memory.idle)
+    if (loader.memory.idle){
+      loaderAvg += loader.memory.idle;
+    }
+  })
+  console.log(`loader idle average: ${loaderAvg/loaders.length}`)
+
+
+
+  // //priority logic if there aren't a lot of each type
+  // if (2 < min < 5){
+  //   if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length <= min){
+  //     trySpawnLoader(spawner);
+  //     if (done) return;
+  //   }
+  //   if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length / 2 <= min){
+  //     trySpawnCarrier(spawner);
+  //     if (done) return;
+  //   }
+  //   if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length <= min){
+  //     trySpawnUnloader(spawner);
+  //     if (done) return;
+  //   }
+  //   // if (spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length <= min){
+  //   //   trySpawnMobileBuilder(spawner);
+  //   //   if (done) return;
+  //   // }
+  // }
+  // //priority for if there are a lot of each type already
+  // trySpawnCarrier(spawner);
   // if (done) return;
-  //once carrier has logic, put it before loader and unloader bc of the situation where it tries to make a loader for each source before any carriers
+  // trySpawnUnloader(spawner);
+  // if (done) return;
+  // trySpawnLoader(spawner);
+  // if (done) return;
+  // // trySpawnMobileBuilder(spawner)
+  // // if (done) return;
+  // //once carrier has logic, put it before loader and unloader bc of the situation where it tries to make a loader for each source before any carriers
   
   
 

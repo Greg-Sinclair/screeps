@@ -16,13 +16,12 @@ const IDLE_PLUS = 1;
 var roleCarrier = {
   /** @param {Creep} creep **/
   run: function (creep) {
-
     //change states if necessary
     workerUtilities.cxHousekeeping(creep);
 
     if (creep.memory.loading == true){
       if (creep.memory.flag == null){
-        if(!workerUtilities.reserveCxPickupFlag(creep)){
+        if(!workerUtilities.reserveCxFlag(creep, COLOR_ORANGE)){
           if (creep.memory.idle < 100){
             creep.memory.idle += IDLE_PLUS;
           }
@@ -90,111 +89,6 @@ var roleCarrier = {
 }
 
 
-
-//     //find a flag or spawn if one isn't assigned
-//     if (creep.memory.flag == null && creep.memory.feedingSpawn == null){
-//       if (creep.memory.loading == true){
-//         //find a loading carrier flag
-//         workerUtilities.reserveTxCxFlag(creep)
-//       }
-//       else{
-//         if (creep.memory.source!=null){
-//           //last source it fetched from, used to decide if it's a good candidate to feed a spawn
-//           //check if a spawn needs fed
-//           // console.log(`${creep.name}looking for spawn to feed`)
-//           // var spawners = creep.room.find(FIND_MY_SPAWNS);
-//           var spawners = creep.room.find(FIND_MY_SPAWNS, {filter:function(spawner){
-//             // console.log(spawner.memory.carrierOnRoute != true)
-//             // console.log(spawner.store.getFreeCapacity([RESOURCE_ENERGY]) > 0)
-//             // console.log(spawner.memory.nearestSource == creep.memory.source)
-//             return(spawner.memory.carrierOnRoute != true && spawner.store.getFreeCapacity([RESOURCE_ENERGY]) > 0 && spawner.memory.nearestSource == creep.memory.source)
-//           }});
-//           // console.log(spawners)
-//           if (spawners.length > 0){
-//             spawners[0].memory.carrierOnRoute = true;
-//             creep.memory.feedingSpawn = spawners[0].id;
-//             creep.memory.timeout = 0;
-//             return;
-//           }
-//         }
-//         //find an unloading carrier flag
-//         var flags = creep.room.find(FIND_FLAGS, {filter: function(flag) {
-//           return (flag.color==COLOR_YELLOW && flag.secondaryColor==COLOR_GREEN && flag.memory.claimed!=true && workerUtilities.countAdjacentLoadersUnloaders(flag)>0&& !flag.pos.findInRange(FIND_FLAGS, 1, {filter:{function(flag2){
-//             //ignore flags adjacent to tx flags with a carrier en-route, in order to not blockade them
-//             return flag2.color==COLOR_YELLOW && flag2.secondaryColor==COLOR_RED && flag2.memory.claimed == true
-//           }}}))
-//         }}).sort(function(a,b){return workerUtilities.countAdjacentLoadersUnloaders(b)-workerUtilities.countAdjacentLoadersUnloaders(a)});
-//         if (flags.length > 0){
-//           //this should ideally make it pick the spot with the most valid loaders/unloaders
-//           creep.memory.flag = flags[0].name;
-//           creep.memory.timeout = 0;
-//           flags[0].memory.claimed = true;
-//         }
-//       }
-//     }
-    
-//     //target established, now move to it
-//     if (creep.memory.flag && !creep.memory.feedingSpawn){
-//       //target flag (tx or rx)
-//       var flag = creep.room.find(FIND_FLAGS, {filter: {name:creep.memory.flag}})[0]
-//       if (creep.pos.x == flag.pos.x && creep.pos.y == flag.pos.y){
-//         if (creep.memory.idle > -100){
-//           creep.memory.idle --;
-//         }
-//         if (creep.memory.timeout < TIMEOUT){
-//           creep.memory.timeout++;
-//         }
-//         else{
-//           //timeout. free flag and choose a different one
-//           flag.memory.claimed = false;
-//           creep.memory.flag = null;
-//         }
-//         if (creep.memory.loading == false){
-//           //pass energy to all adjacent unloaders
-//           //if it's loading, just need to stand around
-//           var unloaders = creep.room.find(FIND_MY_CREEPS, {filter: function(unloader){
-//             return(
-//               unloader.memory.role in rxClasses &&
-//               creep.room.findPath(unloader.pos, creep.pos).length <=1 &&
-//               unloader.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-//             )
-//           }});
-//           for (var unloader in unloaders){
-//             creep.transfer(unloaders[unloader], RESOURCE_ENERGY)
-            
-//             //this part is messy in how it controls idle, etc
-//             return;
-//           }
-//         }
-//       }
-//       else{
-//         creep.moveTo(flag.pos);
-//         if (creep.memory.idle > -100){
-//           creep.memory.idle --;
-//         }
-//         return;
-//       }
-//     }
-//     else if (creep.memory.feedingSpawn) {
-//       if (creep.memory.timeout < TIMEOUT){
-//         creep.memory.timeout++;
-//       }
-//       var spawner = Game.getObjectById(creep.memory.feedingSpawn);
-//       if(creep.transfer(spawner, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-//         creep.moveTo(spawner);
-//       }
-//       if (spawner.store.getFreeCapacity[RESOURCE_ENERGY]==0 || creep.store[RESOURCE_ENERGY] == 0 || creep.memory.timeout > TIMEOUT){
-//         spawner.memory.carrierOnRoute = false;
-//         creep.memory.feedingSpawn = null;
-//       }
-//       return;
-//     }
-//     if (creep.memory.idle < 100){
-//       creep.memory.idle ++;
-//     }
-//   }
-// }
-
 //once the carrier is loaded, decide where to take it (spawner, tower worksite, controller)
 //unsure how to prioritize them given that lots of carriers will be running around. 
 function findWork(creep){
@@ -224,15 +118,19 @@ function findWork(creep){
     creep.memory.target = targets[0].id
     return true;
   }
-  var flags = creep.room.find(FIND_FLAGS, {filter:function(flag){
-    //2 types of flags it can find: controller Cx, builder
-    return (flag.color == COLOR_YELLOW && flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true)
-  }}).sort(function(a,b){return workerUtilities.countAdjacentLoadersUnloaders(b)-workerUtilities.countAdjacentLoadersUnloaders(a)});
-  if (flags.length > 0){
-    creep.memory.flag = flags[0].name;
-    flags[0].memory.claimed = true;
+  // if it found nothing else, grab an unloader flag
+  if (workerUtilities.reserveCxFlag(creep, COLOR_YELLOW)){
     return true;
   }
+  // var flags = creep.room.find(FIND_FLAGS, {filter:function(flag){
+  //   //2 types of flags it can find: controller Cx, builder
+  //   return (flag.color == COLOR_YELLOW && flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true)
+  // }}).sort(function(a,b){return workerUtilities.countAdjacentLoadersUnloaders(b)-workerUtilities.countAdjacentLoadersUnloaders(a)});
+  // if (flags.length > 0){
+  //   creep.memory.flag = flags[0].name;
+  //   flags[0].memory.claimed = true;
+  //   return true;
+  // }
   return false;
 }
 

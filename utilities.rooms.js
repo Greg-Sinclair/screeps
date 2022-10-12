@@ -1,12 +1,13 @@
 var sourceUtilities = require('utilities.sources');
 
-var UPDATE_TIMER = 180;
+var UPDATE_TIMER = 20;
 
 module.exports = {
   'checkDevelopmentStates': checkDevelopmentStates,
   'checkRoomUpdateTimer': checkRoomUpdateTimer,
   'isSpaceSafe': isSpaceSafe,
   'printRoomDiagnostics': printRoomDiagnostics,
+  'resetRoomUpdateTimer': resetRoomUpdateTimer,
 }
   //these states go 'pending' (not connected yet), 'partial' (ongoing development), 'complete' (roads are finished and has enough Tx (or did at some point))
 function checkDevelopmentStates(room) {
@@ -62,21 +63,27 @@ function checkDevelopmentStates(room) {
 
 
   
-function checkRoomUpdateTimer(spawn){
-  if (spawn.memory.updateTimer==null){
+function checkRoomUpdateTimer(room){
+  if (room.memory.updateTimer==null){
     // spawn.memory.updateTimer = UPDATE_TIMER - 1;
-    spawn.memory.updateTimer = 0
+    room.memory.updateTimer = 0
     console.log('update timer initialized')
     return true; //fires immediately once without waiting for the timer, then fires a second time immediately (necessary for the green flags to spawn)
   }
-  if (spawn.memory.updateTimer >= UPDATE_TIMER){
-    spawn.memory.updateTimer = 0;
+  if (room.memory.updateTimer >= UPDATE_TIMER){
+    room.memory.updateTimer = 0;
     return true;
   }
   else{
-    spawn.memory.updateTimer++;
+    room.memory.updateTimer++;
     return false;
   }
+}
+
+// called in order to queue another run of some admin function for the next tick, ie placing flags in waves
+function resetRoomUpdateTimer(room){
+  room.memory.updateTimer = UPDATE_TIMER
+  console.log('resetting update timer')
 }
 
 function printRoomDiagnostics(room){

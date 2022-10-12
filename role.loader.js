@@ -29,9 +29,17 @@ var roleLoader = {
     //I could see this creating a potential traffic jam, especially if the flag isn't reachable
     if (creep.memory.setup == true && creep.memory.flag){
       var flag = creep.room.find(FIND_FLAGS, {filter: {name:creep.memory.flag}})[0]
-      if (creep.pos.x == flag.pos.x &&creep.pos.y == flag.pos.y){
+      if (!flag){
+        // flag has disappeared for some reason, reset self
+        creep.memory.setup = false;
         creep.memory.flag = null;
-        flag.remove();
+        return;
+      }
+      if (creep.pos.x == flag.pos.x && creep.pos.y == flag.pos.y){
+        creep.memory.onSite = true;
+        //keep the flag name in memory instead of destroying it, room control will free it if the creep dies
+        // creep.memory.flag = null;
+        // flag.remove();
       }
       else{
         creep.moveTo(flag.pos, { visualizePathStyle: { stroke: "#ffaa00" } });
@@ -39,7 +47,7 @@ var roleLoader = {
       }
     }
     //is now at flag, stay there
-    if (creep.memory.setup == true && creep.memory.flag == null){
+    if (creep.memory.setup == true && creep.memory.onSite == true){
       //mine or pass to carrier
       if (creep.store.getFreeCapacity([RESOURCE_ENERGY]) > 0){
         if (creep.harvest(source) != -6){

@@ -2,7 +2,7 @@
 //roles
 const roleHarvester = require("role.harvester");
 const roleBuilder = require("role.builder");
-const roomControl = require("roomControl.queueBuilds");
+const roomControl = require("roomControl");
 const roleCarrier = require("role.carrier");
 const roleLoader = require("role.loader");
 const roleUnloader = require("role.unloader");
@@ -38,28 +38,16 @@ module.exports.loop = function () {
 
   //per-room stuff
   for (var room in Game.rooms){
+    roomControl.run(Game.rooms[room]);
     var mySpawns = Game.rooms[room].find(FIND_MY_SPAWNS)
     //per-room functions
     if (mySpawns){
-      
       var spawner = mySpawns[0]
-      //runs less frequently
-      if (roomUtilities.checkRoomUpdateTimer(spawner)){
-        roomUtilities.checkDevelopmentStates(Game.rooms[room]);
-        roomUtilities.printRoomDiagnostics(Game.rooms[room]);
-        roomControl.run(spawner);
-        //infrequent per-spawner checks
-        for (var s in mySpawns){
-          var spawn = mySpawns[s];
-          spawnUtilities.updateNearestSource(spawn);
-        }
-      }
       spawnCreepsDynamically.run(spawner);
       //each-tick per-spawner functions
       for (var s in mySpawns){
         var spawn = mySpawns[s];
         spawnUtilities.carrierFeedTimeoutCheck(spawn);
-
       }
     }
   }

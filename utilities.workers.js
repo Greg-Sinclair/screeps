@@ -3,7 +3,7 @@
 module.exports = {
   'countAdjacentLoadersUnloaders':countAdjacentLoadersUnloaders,
   'cxHousekeeping':cxHousekeeping,
-  'reserveCxPickupFlag':reserveCxPickupFlag,
+  'reserveCxFlag':reserveCxFlag,
   'deliverEnergy':deliverEnergy,
 }
 
@@ -58,55 +58,119 @@ function cxHousekeeping(creep){
 
 //this is getting to be a headache. probably better to rebuild the Cx flag handling from scratch
 
-function reserveCxPickupFlag(creep){
-  //process of choosing a flag: find a source with a loader who has been idling and an open Cx flag, sorted by nearest. take the nearest flag of that loader
-  // console.log('trying to reserve cx pickup flag')
-  var sources = creep.room.find(FIND_SOURCES, {filter: function(source){
-    return source.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(creep){
-      return creep.memory.role == "loader" && creep.memory.idle > 0;
-    }}).length > 0 && source.pos.findInRange(FIND_FLAGS, 2, {filter: function(flag){
-      return flag.color == COLOR_ORANGE && flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true
-    }}).length > 0 && (creep.memory.role == 'carrier' || source.memory.carrierOnly != true)
-  }}).sort(function(a,b){return creep.pos.findPathTo(a.pos).length-creep.pos.findPathTo(b.pos).length});
-  if (sources.length > 0){
-    var flags = sources[0].pos.findInRange(FIND_FLAGS, 2, {filter: function(flag){
-      return flag.color == COLOR_ORANGE && flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true
-    }}).sort(function(a,b){return countAdjacentLoadersUnloaders(b)-countAdjacentLoadersUnloaders(a)})
-    if (flags.length > 0){
-      flags[0].memory.claimed = true;
-      creep.memory.flag = flags[0].name;
-      creep.memory.timeout = 0;
-      //track the last source it pulled from
-      creep.memory.source = sources[0].id;
-      //if the creep demanded a source prioritize carriers, it saved that source's name. if it's the last creep with that name saved, remove the flag from the source
-      if (creep.memory.demandingSource){
-        var demandedSource = creep.room.find(FIND_SOURCES, {filter:{id:creep.memory.demandingSource}})
-        creep.memory.demandingSource = null;
-        if (demandedSource.length > 0){
-          var demandingCreeps = creep.room.find(FIND_MY_CREEPS, {filter:function(creep){
-            return creep.memory.demandingSource == demandedSource[0].id
-          }});
-          if (demandingCreeps.length == 0){
-            demandedSource[0].memory.carrierOnly = false;
-          }
+// takes a primary color to search for the corresponding green flag of
+function reserveCxFlag(creep, color){
+  if (color == COLOR_YELLOW){
+    var targetRole = "unloader"
+  }
+  else {
+    // this is the default case just so there's something
+    var targetRole = "loader"
+  }
+  // source must have an idling loader
+  // loader must have an adjacent open Cx flag
+  // this Cx flag must not be the last open Cx flag adjacent to an open Tx flag
+  //querying sources is unnecessary, just query the loaders directly
+
+  var targetFlags = creep.room.find(FIND_FLAGS, {filter:function(flag){
+    // this is to make it execute faster since it needs to query all flags in the room
+    if (flag.secondaryColor != COLOR_GREEN){return false;}
+    if (flag.color != color || flag.memory.claimed){return false;}
+    // look for an idling loader
+    if (flag.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(targetCreep){
+      return targetCreep.memory.role == targetRole && targetCreep.memory.idle > 0 && targetCreep.memory.onSite == true
+    }}).length == 0){return}
+    // now check if it blocks other flags
+    if (flag.pos.findInRange(FIND_FLAGS, 1, {filter: function(redFlag){
+      // there's an argument that it should only care about "claimed" red flags, since the carrier will likely move away again before a loader spawns and claims it
+      return flag.secondaryColor == COLOR_RED && redFlag.pos.lookFor(LOOK_MY_CREEPS).length == 0 && redFlag.memory.claimed == true && flag2.pos.findInRange(FIND_FLAGS, 1, {filter: function(greenFlag){
+        return greenFlag.secondaryColor == COLOR_GREEN && greenFlag.claimed == false
+      }}).length > 1
+    }}).length == 0
+  ){
+    return true;
+  }}}).sort(function(a,b){
+    // since it already filters by idle state of the loader, checking the number of loaders is redundant
+    // return (creep.pos.findPathTo(a.pos).  length*countAdjacentLoadersUnloaders(a)) - (creep.pos.findPathTo(b.pos).length*countAdjacentLoadersUnloaders(b))});
+    return creep.pos.findPathTo(a.pos).  length - creep.pos.findPathTo(b.pos).length;
+  });
+  if (targetFlags.length > 0){
+    targetFlags[0].memory.claimed = true;
+    creep.memory.flag = targetFlags[0].name;
+    creep.memory.timeout = 0;
+    //track the last source it pulled from
+    // idk what this would be used for, so it's removed
+    // creep.memory.source = targetFlags[0].pos.findInRange(FIND_SOURCES, 2)[0].id;
+    // demandingSource hasn't been changed lately, needs to be looked into further and tested
+    if (creep.memory.demandingSource){
+      var demandedSource = creep.room.find(FIND_SOURCES, {filter:{id:creep.memory.demandingSource}})
+      creep.memory.demandingSource = null;
+      if (demandedSource.length > 0){
+        var demandingCreeps = creep.room.find(FIND_MY_CREEPS, {filter:function(creep){
+          return creep.memory.demandingSource == demandedSource[0].id
+        }});
+        if (demandingCreeps.length == 0){
+          demandedSource[0].memory.carrierOnly = false;
         }
       }
-      return true;
     }
-  }
-  //if this was a carrier that gets this far, set a flag in the source to make it only accept carriers
-  //idk how to turn it off afterwards
-  var source = creep.pos.findClosestByPath(FIND_SOURCES, {filter: function(source){
-    return source.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(creep){
-      return creep.memory.role == 'loader'
-    }})
-  }, ignoreCreeps : true })
-  if (source){
-    source.memory.carrierOnly = true;
-    creep.memory.demandingSource = source.id;
+    return true;
   }
   return false;
 }
+  //old, more convoluted query:
+  // var sources = creep.room.find(FIND_SOURCES, {filter: function(source){
+  //   return source.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(targetCreep){
+  //     return targetCreep.memory.role == "loader" && targetCreep.memory.idle > 0 && targetCreep.memory.onSite == true && targetCreep.pos.findInRange(FIND_FLAGS, 1, {filter: function(flag){
+  //       return flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true && flag.pos.findInRange(FIND_FLAGS, 1, {filter: function(flag2){
+  //         // flag 2 is the other red flags that may be blocked if this one is taken
+  //         return flag2.secondaryColor == COLOR_RED && flag2.pos.lookFor(LOOK_MY_CREEPS).length == 0 && flag2.pos.findInRange(FIND_FLAGS, 1, {filter: function(flag3){
+  //           //flag 3 is the potential green flags that could be used to get to this red flag even if the chosen green flag was taken
+  //           return flag3.secondaryColor == COLOR_GREEN && flag3.claimed == false
+  //         }}).length > 1
+  //       }).length == 0})
+  //     }}).length > 0
+  //   }}).length > 0 && (creep.memory.role == 'carrier' || source.memory.carrierOnly != true)
+  // }}).sort(function(a,b){return creep.pos.findPathTo(a.pos).length-creep.pos.findPathTo(b.pos).length});
+//   if (sources.length > 0){
+//     var flags = sources[0].pos.findInRange(FIND_FLAGS, 2, {filter: function(flag){
+//       return flag.color == COLOR_ORANGE && flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true
+//     }}).sort(function(a,b){return countAdjacentLoadersUnloaders(b)-countAdjacentLoadersUnloaders(a)})
+//     if (flags.length > 0){
+//       flags[0].memory.claimed = true;
+//       creep.memory.flag = flags[0].name;
+//       creep.memory.timeout = 0;
+//       //track the last source it pulled from
+//       creep.memory.source = sources[0].id;
+//       //if the creep demanded a source prioritize carriers, it saved that source's name. if it's the last creep with that name saved, remove the flag from the source
+//       if (creep.memory.demandingSource){
+//         var demandedSource = creep.room.find(FIND_SOURCES, {filter:{id:creep.memory.demandingSource}})
+//         creep.memory.demandingSource = null;
+//         if (demandedSource.length > 0){
+//           var demandingCreeps = creep.room.find(FIND_MY_CREEPS, {filter:function(creep){
+//             return creep.memory.demandingSource == demandedSource[0].id
+//           }});
+//           if (demandingCreeps.length == 0){
+//             demandedSource[0].memory.carrierOnly = false;
+//           }
+//         }
+//       }
+//       return true;
+//     }
+//   }
+//   //if this was a carrier that gets this far, set a flag in the source to make it only accept carriers
+//   //idk how to turn it off afterwards
+//   var source = creep.pos.findClosestByPath(FIND_SOURCES, {filter: function(source){
+//     return source.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(creep){
+//       return creep.memory.role == 'loader'
+//     }})
+//   }, ignoreCreeps : true })
+//   if (source){
+//     source.memory.carrierOnly = true;
+//     creep.memory.demandingSource = source.id;
+//   }
+//   return false;
+// }
 
 
 // function reserveTxCxFlag(creep){
@@ -133,12 +197,12 @@ function reserveCxPickupFlag(creep){
 
 function deliverEnergy(creep, roles){
   //takes an array of roles that the creep is willing to give its energy to
-  var targets = creep.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(creep){
-    return  roles.includes(creep.memory.role) && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  var targets = creep.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(target){
+    return  roles.includes(target.memory.role) && target.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && creep.name != target.name
   }})
   if (targets.length > 0){
     for (var i = 0; i < targets.length; i++){
-      if(creep.transfer(targets[0], RESOURCE_ENERGY==0)){
+      if(creep.transfer(targets[0], RESOURCE_ENERGY)==0){
         return true;
       }
     }
