@@ -50,31 +50,50 @@ function chooseCreepToSpawn(spawner){
 
   //if there aren't carriers running, spawn mobile harvesters. otherwise convert the existing ones into mobile builders
 
+const RATIO_LOADER = 1;
+const RATIO_CARRIER = 0.75;
+const RATIO_UNLOADER = 1;
+
 //proceeding through this linearly doesn't work since it relies on a given type being maxed out when what's really needed is a good average
   var counts = {};
   //counts number of starting types (loader, carrier, unloader, mobile builder) to decide which to spawn. weighted because there should be 2 carriers per loader. add new types if necessary.
-  counts['loader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length;
-  counts['carrier'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length / 2;
-  counts['unloader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length;
+  counts['loader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length * RATIO_LOADER;
+  counts['carrier'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length * RATIO_CARRIER;
+  counts['unloader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length * RATIO_UNLOADER;
   // counts['builderMobile'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length;
   // var min = Math.min(...Object.values(counts));
   var min = _.min(Object.values(counts));
-  console.log(Object.values(counts))
+  console.log('\n')
+  console.log(`loaders: ${counts['loader']}`)
+  console.log(`carriers: ${counts['carrier']}`)
+  console.log(`unloaders: ${counts['unloader']}`)
+
+  // idle checks are disabled during setup
 
   if (min <= 3){
-    if (counts['loader'] < min+1){
-      trySpawnLoader(spawner);
-      if (done) return;
+    if (counts['loader'] == min){
+      trySpawnLoader(spawner, true);
+      if (done){
+        console.log('spawning loader')
+        return;
+      } 
     }
-    if (counts['unloader'] < min+1){
-      trySpawnUnloader(spawner);
-      if (done) return;
+    if (counts['unloader'] == min){
+      trySpawnUnloader(spawner, true);
+      if (done) {
+        console.log('spawning unloader')
+        return;
+      }
     }
-    if (counts['carrier'] < min+1){
-      trySpawnCarrier(spawner);
-      if (done) return;
+    if (counts['carrier'] == min){
+      trySpawnCarrier(spawner, true);
+      if (done){
+        console.log('spawning carrier')
+        return;
+      } 
     }
   }
+  return;
 
   // the above implementation is decent to a point, but once there are a decent number decide which to spawn based on their workloads as well as incorporating builders (can be pushed below). unsure counts even really matters now though
   // counts['builderMobile'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length;
@@ -182,26 +201,29 @@ function spawnMobileBuilder(spawner){
   done=true;
 }
 
-function trySpawnLoader(spawner){
+function trySpawnLoader(spawner, overrideIdleCheck){
   //look for sources that are part of the network. this is only to exclude unused ones, the idle on the Tx is how it checks whether they're overused.
   var sources = spawner.room.find(FIND_SOURCES).filter(function(source){
     return (source.memory.devState == 'partial' || source.memory.devState == 'complete') && roomUtilities.isSpaceSafe(source.pos)
   });
   // console.log(`sources: ${sources.length}`)
   for (var i = 0; i < sources.length; i++){
-    if (_(Game.creeps).filter(function(creep){
-      return (creep.memory.role=='loader' && creep.memory.source == sources[i].id && creep.memory.idle > 0);
-    }).size() == 0){
-      //there's either no loader for this source, or they're all reasonably busy. check if there's an open flag
-      //the trick with these flags is they don't have a direct pointer to their source, so check if they're directly adjacent to one
-      var loadFlags = spawner.room.find(FIND_FLAGS, {filter: function(flag) {
-        return (flag.color==COLOR_ORANGE && flag.secondaryColor==COLOR_RED && flag.memory.claimed!=true && findFlagSource(flag)==sources[i])
-      }})
-      if (loadFlags.length > 0){
-        spawnLoader(spawner, sources[i].id);
-        return;
+    if (!overrideIdleCheck){
+      if (_(Game.creeps).filter(function(creep){
+        return (creep.memory.role=='loader' && creep.memory.source == sources[i].id && creep.memory.idle > 0);
+      }).size() > 0){
+        continue;
       }
-    } 
+    }
+    //there's either no loader for this source, or they're all reasonably busy. check if there's an open flag
+    //the trick with these flags is they don't have a direct pointer to their source, so check if they're directly adjacent to one
+    var loadFlags = spawner.room.find(FIND_FLAGS, {filter: function(flag) {
+      return (flag.color==COLOR_ORANGE && flag.secondaryColor==COLOR_RED && flag.memory.claimed!=true && findFlagSource(flag)==sources[i])
+    }})
+    if (loadFlags.length > 0){
+      spawnLoader(spawner, sources[i].id);
+      return;
+    }
   }
 }
 
@@ -232,15 +254,18 @@ function spawnLoader(spawner, source){
   done=true;
 }
 
-function trySpawnUnloader(spawner){
+function trySpawnUnloader(spawner, overrideIdleCheck){
   //this is all going to have to change for multi-room setups
   //check how busy the current unloaders are
   //this will return if either there are no unloaders, or any unloader has a low workload (implying no more are needed)
-  if (_(Game.creeps).filter(function(creep){
-    return (creep.memory.role=='unloader' && creep.memory.idle > 25);
-  }).size() > 0){
-    return;
-  } 
+  //this may cause the second unloader to take longer to spawn since the first will build up some idle during setup, but this is fine since it is better to create a builder in that case anyway
+  if (!overrideIdleCheck){
+    if (_(Game.creeps).filter(function(creep){
+      return (creep.memory.role=='unloader' && creep.memory.idle > 25);
+    }).size() > 0){
+      return;
+    }
+  }
   //check if the controller has any unload slots left
   var unloadFlags = spawner.room.find(FIND_FLAGS, {filter: function(flag) {
     return (flag.color==COLOR_YELLOW && flag.secondaryColor==COLOR_RED && flag.memory.claimed!=true)
@@ -267,15 +292,17 @@ function spawnUnloader(spawner){
   done=true;
 }
 
-function trySpawnCarrier(spawner){
+function trySpawnCarrier(spawner, overrideIdleCheck){
   //spawn carrier if the carriers are underworked
   //spawning lots of all 3 will cause them to deplete the sources, all go idle, steady state
   //
-  if (_(Game.creeps).filter(function(creep){
-    return (creep.memory.role=='carrier' && creep.memory.idle > 25);
-  }).size() > 0){
-    return;
-  } 
+  if (!overrideIdleCheck){
+    if (_(Game.creeps).filter(function(creep){
+      return (creep.memory.role=='carrier' && creep.memory.idle > 25);
+    }).size() > 0){
+      return;
+    } 
+  }
   spawnCarrier(spawner);
 }
 
@@ -293,7 +320,7 @@ function spawnCarrier(spawner){
   }
   
   spawner.spawnCreep(recipe,`Cx${n}`, {
-    memory: {role: 'carrier', 'loading': true, idle:0, timeout:0}
+    memory: {role: 'carrier', 'loading': true, job: 'RESUPPLY', idle:0, timeout:0}
   });
   done=true;
 }

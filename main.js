@@ -57,8 +57,12 @@ module.exports.loop = function () {
 
   //execute role-specific scripts
   for (var name in Game.creeps) {
-    
     var creep = Game.creeps[name];
+    // mechanism to let creeps idle rather than spam queries
+    if (creep.memory.timeout > 0){
+      creep.memory.timeout-=1;
+      continue;
+    }
     if (creep.memory.role == "harvester") {
       roleHarvester.run(creep);
     }

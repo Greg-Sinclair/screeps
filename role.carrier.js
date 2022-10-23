@@ -16,11 +16,17 @@ const IDLE_PLUS = 1;
 var roleCarrier = {
   /** @param {Creep} creep **/
   run: function (creep) {
+
+    //new Cx setup with 2 modes: DEPOT and RESUPPLY
+    //depot mode will afk on a flag and give energy to any targets until it runs out of energy or the flag despawns. uses onsite variable
+    //resupply mode will run around giving energy to any structures that need it
+
     //change states if necessary
     workerUtilities.cxHousekeeping(creep);
-
+    
     if (creep.memory.loading == true){
-      if (creep.memory.flag == null){
+      // uses these flags: flag, onSite
+      if (!creep.memory.flag){
         if(!workerUtilities.reserveCxFlag(creep, COLOR_ORANGE)){
           if (creep.memory.idle < 100){
             creep.memory.idle += IDLE_PLUS;
@@ -28,78 +34,113 @@ var roleCarrier = {
           return;
         }
       }
-      var flag = Game.flags[creep.memory.flag];
-      if (creep.pos.x != flag.pos.x || creep.pos.y != flag.pos.y){
+      if (!creep.memory.onSite){
+        var flag = Game.flags[creep.memory.flag];
+        if (!flag){
+          creep.memory.flag = null;
+          return;
+        }
         creep.moveTo(flag);
+        if (creep.pos.isEqualTo(flag.pos)){
+          creep.memory.onSite = true;
+          return;
+        }
       }
+      return;
     }
     else{
-    //first try to hand off power
-      workerUtilities.deliverEnergy(creep, rxClasses);
-      if (creep.memory.target){
-        //possible targets: spawns, extensions, towers, builders
-        var target = Game.getObjectById(creep.memory.target);
-        //check whether it's a structure or creep to decide whether it needs to find a new target
-        if (target.structureType){
-          if (target.store.getFreeCapacity(RESOURCE_ENERGY)==0){
-            creep.memory.target = null;
-            return;
-          }
-        }
-        else{
-          if (target.memory.working != true){
-            creep.memory.target = null;
-            return;
-          }
-        }
-        if (creep.transfer(target, RESOURCE_ENERGY)==ERR_NOT_IN_RANGE){
-          creep.moveTo(target);
-        }
+      if (creep.memory.job == 'DEPOT'){
+        jobDepot(creep);
       }
-      else if (creep.memory.flag){
-        //possible target: controller flags
-        var flag = Game.flags[creep.memory.flag]
-        if (creep.pos.x == flag.pos.x && creep.pos.y == flag.pos.y){
-          if (creep.memory.timeout < TIMEOUT){
-            creep.memory.timeout++;
-          }
-          else{
-            //timeout. free flag and choose a different one
-            flag.memory.claimed = false;
-            creep.memory.flag = null;
-          }
-        }
-        else{
-          creep.moveTo(Game.flags[creep.memory.flag]);
-        }
+      else if (creep.memory.job == 'RESUPPLY'){
+        jobResupply(creep);
       }
-      else{
-        //look for somewhere to take the energy
-        if (!findWork(creep)){
-          if (creep.memory.idle < 100){
-            creep.memory.idle += IDLE_PLUS;
-          }
-        }
-      }
-    }
-    if (creep.memory.idle > -100){
-      creep.memory.idle -= IDLE_MINUS;
     }
   }
 }
 
+// uses these flags: flag, onSite
+function jobDepot(creep){
+  if (creep.memory.onSite == true){
+    workerUtilities.deliverEnergy(creep, rxClasses);
+    return;
+  }
+  else{
+    // destruction of worksites is handled externally to reduce queries here
+    if (creep.memory.flag){
+      var flag = Game.flags[creep.memory.flag];
+      if (creep.pos.isEqualTo(flag.pos)){
+        creep.memory.onSite = true;
+        workerUtilities.deliverEnergy(creep, rxClasses);
+        return;
+      }
+      else{
+        creep.moveTo(flag.pos);
+      }
+    }
+    else{
+      // first try to find a buildsite, then a CxRx flag
+      if (reserveBuildFlag(creep)) return;
+      if (workerUtilities.reserveCxFlag(creep, COLOR_YELLOW)) return;
+      // if it gets this far, give up and become a resupply
+      creep.memory.job = 'RESUPPLY'
+    }
+  }
+}
 
-//once the carrier is loaded, decide where to take it (spawner, tower worksite, controller)
-//unsure how to prioritize them given that lots of carriers will be running around. 
-function findWork(creep){
-  //first determine whether it's even worth starting another job (based on capacity)
+// this is purely for structures
+// uses these flags: target
+function jobResupply(creep){
+  if (!creep.memory.target){
+    if (!findResupplyTarget(creep)){
+      creep.memory.job = 'DEPOT'
+      return;
+    }
+  }
+  var target = Game.getObjectById(creep.memory.target);
+  if (!target){
+    creep.memory.target = null;
+    return;
+  }
+  if (target.store.getFreeCapacity(RESOURCE_ENERGY)==0){
+    creep.memory.target = null;
+    return;
+  }
+  if (creep.transfer(target, RESOURCE_ENERGY)==ERR_NOT_IN_RANGE){
+    creep.moveTo(target);
+  }
+}
+
+// returns a boolean so that it can go to CxRx if it doesn't find a target
+function reserveBuildFlag(creep){
+  var flag = creep.pos.findClosestByPath(FIND_FLAGS, {
+    ignoreCreeps:true,
+    maxRooms:1, //maybe increase this later, might get strange behavior with swarms of them migrating though
+    filter:function(flag){
+    return (
+      flag.secondaryColor != COLOR_GREEN && 
+      flag.color == COLOR_BLUE &&
+      !flag.memory.claimed
+    )
+  }})
+  if (!flag) {
+    return false;
+  }
+  else{
+    flag.memory.claimed = true;
+    flag.memory.creep = creep.name; // used to release the creep once work is finished
+    creep.memory.flag = targetFlags[0].name;
+  }
+}
+
+function findResupplyTarget(creep){
+  // there's probably a smarter way to do this, ratios of distances to the different targets maybe?
+  // choose a target then calculate whether it's actually more efficient to fill up and walk from the source to the target?
   if (creep.store[RESOURCE_ENERGY] < REFILL_THRESHOLD * creep.store.getCapacity(RESOURCE_ENERGY)){
     creep.memory.loading = true;
-    if (creep.memory.flag){
-      Game.flags[creep.memory.flag].memory.claimed = false;
-    }
-    creep.memory.flag = null;
-    creep.memory.target = null;
+    creep.memory.onSite = false;
+    return;
+    //presumably it has no flag if it's here
   }
   //find a target, claim it, save its id (can be loaded by Game.getObjectById). possibilities are spawns, extensions, builders on builder flags (this case could be a little tricky)
   var structures = creep.room.find(FIND_STRUCTURES, {
@@ -109,39 +150,14 @@ function findWork(creep){
         structure.structureType == STRUCTURE_SPAWN ||
         structure.structureType == STRUCTURE_TOWER) && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0 );
       },
-    }).sort(function(a,b){return creep.pos.findPathTo(a).length - creep.pos.findPathTo(b).length});
-  //find the builder directly rather than looking for a flag, then the rest of the code works smoothly except for the check on when to stop
-  var builders = creep.room.find(FIND_MY_CREEPS, {filter:function(creep){return creep.memory.role == 'builder' && creep.memory.working == true}});
-  var targets = structures.concat(builders).sort((function(a,b){return creep.pos.findPathTo(a).length - creep.pos.findPathTo(b).length}));
-  if (targets.length > 0){
-    //no "claiming" for now, just trust that the carriers will be far enough apart to not go for the same targets constantly. not to mention 2 going to the same builder is fine.
-    creep.memory.target = targets[0].id
-    return true;
+  }).sort(function(a,b){return creep.pos.findPathTo(a).length - creep.pos.findPathTo(b).length});
+  if (structures.length == 0){
+    // give up and become a depot? idk
+    return false;
   }
-  // if it found nothing else, grab an unloader flag
-  if (workerUtilities.reserveCxFlag(creep, COLOR_YELLOW)){
-    return true;
-  }
-  // var flags = creep.room.find(FIND_FLAGS, {filter:function(flag){
-  //   //2 types of flags it can find: controller Cx, builder
-  //   return (flag.color == COLOR_YELLOW && flag.secondaryColor == COLOR_GREEN && flag.memory.claimed != true)
-  // }}).sort(function(a,b){return workerUtilities.countAdjacentLoadersUnloaders(b)-workerUtilities.countAdjacentLoadersUnloaders(a)});
-  // if (flags.length > 0){
-  //   creep.memory.flag = flags[0].name;
-  //   flags[0].memory.claimed = true;
-  //   return true;
-  // }
-  return false;
+  creep.memory.target = structures[0].id;
+  return true;
 }
-
-// function findWorkExtension(creep){
-//   var extensions = creep.pos.findInRange(FIND_MY_EXTENSIONS, 4,{filter:function(extension){
-//     return extension.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-//   }}).sort(function(a,b){return creep.pos.findPathTo(a).length - creep.pos.findPathTo(b).length})
-//   if (extensions.length > 0){
-//     creep.memory.target = extensions[0].id
-//   }
-// }
 
 
 module.exports = roleCarrier;
