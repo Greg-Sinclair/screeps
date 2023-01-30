@@ -10,67 +10,67 @@ var workerUtilities = require('utilities.workers');
 var rxClasses = ['carrier', 'harvester', 'builderMobile'];
 //define the ratio used to determine how idle a creep is
 const IDLE_MINUS = 1;
-const IDLE_PLUS = 10;
+const IDLE_PLUS = 5;
 
 var roleLoader = {
   /** @param {Creep} creep **/
   run: function (creep) {
 
-    var source = Game.getObjectById(creep.memory.source);
-    if (creep.memory.setup != true){
-      var flags = creep.room.lookForAtArea(LOOK_FLAGS, source.pos.y-1, source.pos.x-1, source.pos.y+1, source.pos.x+1, true).filter(function(item){return (item.flag.color == COLOR_ORANGE && item.flag.secondaryColor == COLOR_RED && item.flag.memory.claimed != true)}).sort(workerUtilities.countAdjacentLoadersUnloaders);
-      // console.log(`loader init found flags: ${flags}`)
-      if (flags.length > 0) {
-        flags[0].flag.memory.claimed = true;
-        creep.memory.flag = flags[0].flag.name;
-        creep.memory.setup = true;
+    if (!creep.memory.onSite){
+      if(!creep.memory.flag){
+        var newFlag = workerUtilities.reserveTxRxFlag(creep, COLOR_ORANGE)
+        if (newFlag != null){
+          creep.memory.flag = newFlag;
+        }
+        else{
+          creep.memory.timeout = 5;
+          return;
+        }
       }
-    }
-    //I could see this creating a potential traffic jam, especially if the flag isn't reachable
-    if (creep.memory.setup == true && creep.memory.flag){
-      var flag = creep.room.find(FIND_FLAGS, {filter: {name:creep.memory.flag}})[0]
-      if (!flag){
-        // flag has disappeared for some reason, reset self
-        creep.memory.setup = false;
-        creep.memory.flag = null;
-        return;
-      }
+      var flag = Game.flags[creep.memory.flag];
       if (creep.pos.x == flag.pos.x && creep.pos.y == flag.pos.y){
         creep.memory.onSite = true;
-        //keep the flag name in memory instead of destroying it, room control will free it if the creep dies
-        // creep.memory.flag = null;
-        // flag.remove();
       }
       else{
         creep.moveTo(flag.pos, { visualizePathStyle: { stroke: "#ffaa00" } });
         return;
       }
     }
-    //is now at flag, stay there
-    if (creep.memory.setup == true && creep.memory.onSite == true){
-      //mine or pass to carrier
-      if (creep.store.getFreeCapacity([RESOURCE_ENERGY]) > 0){
-        if (creep.harvest(source) != -6){
-          if (creep.memory.idle > -100){
-            creep.memory.idle -= IDLE_MINUS
-            return;
-          }
-        }
+    var sources = creep.pos.findInRange(FIND_SOURCES,1);
+    if (sources.length == 1){
+      var source = sources[0];
+    }
+    else if (sources.length > 1){
+      var source = sources.sort(function(a,b){
+        //go for the one with the most energy
+        return (b.energy - a.energy);
+      })[0]
+    }
+    else{
+      console.log('no source')
+      //no source here for whatever reason
+      creep.memory.onSite = false;
+      var flag = Game.flags[creep.memory.flag];
+      if (flag){
+        flag.memory.claimed = false;
+        flag.memory.creep = null;
       }
-      //look for the nearest carrier, put energy into it
-      //this could be streamlined a fair bit. its expensive, and doesn't appear to correctly pass to harvesters
-      else{
-        if(workerUtilities.deliverEnergy(creep, rxClasses)){
-          if (creep.memory.idle > -100){
-            creep.memory.idle -= IDLE_MINUS
-          }
-          return;
-        }
+      creep.memory.flag = null;
+      creep.memory.timeout = 5;
+      return;
+    }
+    workerUtilities.deliverEnergy(creep, rxClasses)
+    if (creep.store.getFreeCapacity([RESOURCE_ENERGY]) > 0){
+      //idle is only based on the time spent mining, since it can be assumed that the transfers correlate with the mining
+      if (creep.harvest(source) != -6){
+        workerUtilities.idleMinus(creep);
+        return
       }
     }
-    if (creep.memory.idle < 100){
-      creep.memory.idle += IDLE_PLUS;
-    }
+    workerUtilities.idlePlus(creep);
+    //look for the nearest carrier, put energy into it
+    //this could be streamlined a fair bit. its expensive, and doesn't appear to correctly pass to harvesters
+
   }
 }
 

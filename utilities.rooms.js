@@ -83,7 +83,7 @@ function checkRoomUpdateTimer(room){
 // called in order to queue another run of some admin function for the next tick, ie placing flags in waves
 function resetRoomUpdateTimer(room){
   room.memory.updateTimer = UPDATE_TIMER
-  console.log('resetting update timer')
+  //console.log('resetting update timer')
 }
 
 function printRoomDiagnostics(room){

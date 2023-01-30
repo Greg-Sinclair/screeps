@@ -6,6 +6,10 @@
 
 var workerUtilities = require('utilities.workers');
 
+const IDLE_MINUS = 1;
+const IDLE_PLUS = 5;
+
+
 var roleUnloader = {
   /** @param {Creep} creep **/
   run: function (creep) {
@@ -21,7 +25,7 @@ var roleUnloader = {
         creep.memory.setup = true;
       }
     }
-    //move to flag, delete it on arrival
+    //move to flag
     if (creep.memory.setup == true && creep.memory.flag){
       var flag = creep.room.find(FIND_FLAGS, {filter: {name:creep.memory.flag}})[0]
       if (!flag){
@@ -43,13 +47,16 @@ var roleUnloader = {
     //is now at flag, stay there
     if (creep.memory.setup == true && creep.memory.onSite == true){
       if (creep.upgradeController(creep.room.controller) == -6){
-        if (creep.memory.idle < 100){
-          creep.memory.idle++;
-        }
-      } 
+        workerUtilities.idlePlus(creep);
+      }
       else{
-        if (creep.memory.idle > -100){
-          creep.memory.idle--;
+        workerUtilities.idleMinus(creep);
+        //try to hand off energy to adjacent unloaders that have none
+        let targets = creep.pos.findInRange(FIND_MY_CREEPS, 1, {filter: function(targetCreep){
+          return targetCreep.memory.role == 'unloader' && targetCreep.store[RESOURCE_ENERGY] == 0
+        }})
+        for (let targetCreep of targets){
+          creep.transfer(targetCreep, RESOURCE_ENERGY);
         }
       }
     }
@@ -81,7 +88,7 @@ var roleUnloader = {
 //       console.log(`found blocked flag: ${flag}`)
 //     }
 //   }
-  
+
 // }
 
 module.exports = roleUnloader;

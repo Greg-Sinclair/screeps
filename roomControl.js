@@ -57,6 +57,8 @@ var roomControl = {
 // this applies to both sources and controllers, so the level stuff will be handled externally (I don't have a setup to save variables in the controller)
 // since this ought to be done on a per-target bases, the functions this calls will need reworked as well
 
+//TODO there is a case where sources directly next to each other might create weird flag configurations. Try to do them all at the same time to counteract this
+
 function developRoomTxCxFlags(room){
   let controllerFlagLevel = room.memory.controllerFlagLevel;
   let result = false;
@@ -77,7 +79,7 @@ function developRoomTxCxFlags(room){
       level=0;
     }
     newLevel = placeTxRxCxFlagsMultipart(source, level, COLOR_ORANGE);
-    
+
     if (newLevel != level){
       result=true;
     }
@@ -121,7 +123,7 @@ function drawRoad(start, target){
   if (!start || !target) {
     return false;
   }
-  
+
   var path = start.pos.findPathTo(target, {ignoreCreeps:true});
   //for loop is non-inclusive so that it doesn't try to put a road on top of controllers or whatever, since this costs 45k
   for (var i = 1; i < path.length-1; i++){
@@ -164,7 +166,7 @@ function queueConstructions(spawn){
     }
   }
   //there's a way to traverse these roads and connect them to the spawn if they go near it. do an aoe around the spawn for roads, pick the closest one to any point in another path, connect to it
-  
+
 
 
   //place any extensions near the designated source (this is set up when the room is instantiated)
@@ -321,7 +323,7 @@ function checkFlagToSourcePath(flag, layer){
     return cachedCostMatrix;
   }
   if (room.findPath(flag.pos, room.controller.pos, {
-    ignoreCreeps:true, 
+    ignoreCreeps:true,
     ignoreDestructibleStructures:true, //later on, draw roads to each flag so that nothing else will try to build on top of them
     maxRooms:1,
     costCallback:roomCallback
@@ -399,6 +401,6 @@ function placeCxFlags(target, primaryColor){
         placeCxFlag(x+i,y+j, primaryColor)
       }
     }
-  } 
+  }
 }
 
