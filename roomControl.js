@@ -334,6 +334,7 @@ function checkFlagToSourcePath(flag, layer){
 
 }
 
+
 function placeCxFlag(x, y, primaryColor){
   if (x==0 || y==0 || x==49 || y==49){
     return;
@@ -352,6 +353,10 @@ function placeCxFlag(x, y, primaryColor){
     return flag.flag.secondaryColor == COLOR_RED
     //checking both colors is necessary for some insane situations where the source is right next to the controller
   }).length == 0){
+    return;
+  }
+  // avoid places where red flags may be placed in the future. There is plausibly some insane scenario where this prevents a source from getting any green flags, but that can be solved in checkDevelopmentStates
+  if (room.lookForAtArea(LOOK_SOURCES,Math.max(1,y-1), Math.max(1,x-1), Math.min(49,y+1), Math.min(x+1), true).length > 0){
     return;
   }
   room.createFlag(x,y, null, primaryColor, COLOR_GREEN);

@@ -27,7 +27,8 @@ function checkExploitationStates(room) {
   //these states go 'pending' (not connected yet), 'partial' (ongoing development), 'complete' (roads are finished and has enough Tx (or did at some point))
 function checkDevelopmentStates(room) {
   //for the purposes of these queries, spots with enemies nearby may as well not exist. I don't think that's problematic, though there's some absurd situation where enemies run around and the whole room goes Pending
-  //if there are no developed sources, set the two nearest the spawner to pending (to avoid a situation where the nearest is in a bottleneck and slows initial growth)
+  //if there are no developed sources, set the two nearest the spawner to partial (to avoid a situation where the nearest is in a bottleneck and slows initial growth)
+  //there's an insane case where the sources block each other's green flags and can never be completed, but I'm avoiding that for now for the sake of my sanity
   var partialSources = room.find(FIND_SOURCES).filter(function(source){
     return source.memory.devState=='partial'&&isSpaceSafe(source.pos)
   });
@@ -36,24 +37,15 @@ function checkDevelopmentStates(room) {
   });
 
   if (partialSources.length == 0 && completeSources.length == 0){
-    console.log('promoting 2 sources')
     //same line twice here so that it activates 2
     var spawn = room.find(FIND_MY_SPAWNS)[0];
-    var promotedSource = spawn.pos.findClosestByPath(FIND_SOURCES, {ignoreCreeps:true, filter: function(source){
-      return source.memory.devState!='partial'&&source.memory.devState!='complete'&&isSpaceSafe(source.pos)
-    }})
-    if (!promotedSource){
-      return;
-    }
-    promotedSource.memory.devState = 'partial';
-    promotedSource = spawn.pos.findClosestByPath(FIND_SOURCES, {ignoreCreeps:true, filter: function(source){
-      return source.memory.devState!='partial'&&source.memory.devState!='complete'&&isSpaceSafe(source.pos)
-    }})
-    if (!promotedSource){
-      return;
-    }
-    promotedSource.memory.devState = 'partial';
-    return;
+    promoteSourceToPartial(spawn);
+    promoteSourceToPartial(spawn);
+  }
+  //try to keep 2 "partial" sources at all times
+  if (partialSources.length < 2){
+    var spawn = room.find(FIND_MY_SPAWNS)[0];
+    promoteSourceToPartial(spawn);
   }
   //audit all the "partial" sources, if there are none left after promote another to partial
   for (var i in partialSources){
@@ -75,8 +67,16 @@ function checkDevelopmentStates(room) {
   }
 }
 
-
-
+function promoteSourceToPartial(spawn){
+  var promotedSource = spawn.pos.findClosestByPath(FIND_SOURCES, {ignoreCreeps:true, filter: function(source){
+    return source.memory.devState!='partial'&&source.memory.devState!='complete'&&isSpaceSafe(source.pos)
+  }})
+  if (!promotedSource){
+    return false;
+  }
+  promotedSource.memory.devState = 'partial';
+  return true
+}
 
 function checkRoomUpdateTimer(room){
   if (room.memory.updateTimer==null){

@@ -14,7 +14,7 @@ var roleUnloader = {
   /** @param {Creep} creep **/
   run: function (creep) {
     //first time config: find an unload flag and reserve it
-    if (creep.memory.setup != true){
+    if (!creep.memory.flag){
       creep.memory.idle = 0;
       var flags = creep.room.find(FIND_FLAGS, {filter: function(flag) {
         return (flag.color==COLOR_YELLOW && flag.secondaryColor==COLOR_RED && flag.memory.claimed!=true)
@@ -22,15 +22,13 @@ var roleUnloader = {
       if (flags.length > 0) {
         creep.memory.flag = flags[0].name;
         flags[0].memory.claimed = true;
-        creep.memory.setup = true;
       }
     }
     //move to flag
-    if (creep.memory.setup == true && creep.memory.flag){
-      var flag = creep.room.find(FIND_FLAGS, {filter: {name:creep.memory.flag}})[0]
+    else {
+      var flag = Game.flags[creep.memory.flag];
       if (!flag){
         // flag has disappeared for some reason, reset self
-        creep.memory.setup = false;
         creep.memory.flag = null;
         return;
       }
@@ -45,7 +43,7 @@ var roleUnloader = {
       }
     }
     //is now at flag, stay there
-    if (creep.memory.setup == true && creep.memory.onSite == true){
+    if (creep.memory.onSite == true){
       if (creep.upgradeController(creep.room.controller) == -6){
         workerUtilities.idlePlus(creep);
       }

@@ -118,6 +118,8 @@ const RATIO_UNLOADER = 1.5;
   }})){
     idleBuilders += builder.memory.idle;
   }
+  //the idle setup also has some nasty cases where the creeps are just stuck for whatever reason and bork the idle totals for the others. ensuring that they can't update idle in those cases is necessary (and probably already the case for the current creeps). It should explicitly check an action that either does idle+ or idle-, rather than kicking to idle+ at the end of the function.
+
   // console.log(`idle loaders: ${idleLoaders}, idle unloaders: ${idleUnloaders}`)
   //use the idle count for loader and unloader to decide which of loader/unloader/carrier to spawn
   //if one but not the other is idle, it means the other is overworked
@@ -187,9 +189,10 @@ function spawnUnloader(spawner){
     return true
   }
   else{
-    //spawn failed, reset the flag
-    Game.flags[flagName].memory.claimed=false;
-    Game.flags[flagName].memory.creep=null;
+    if (flagName){
+      Game.flags[flagName].memory.claimed=false;
+      Game.flags[flagName].memory.creep=null;
+    }
   }
   return false
 }
