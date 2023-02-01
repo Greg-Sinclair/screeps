@@ -96,25 +96,25 @@ const RATIO_UNLOADER = 1.5;
   let idleBuilders = 0
 
   for (let loader of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-    return creep.memory.role=='loader' && creep.memory.idle > 0
+    return creep.memory.role=='loader'
   }})){
     idleLoaders += loader.memory.idle;
   }
 
   // for (let carrier of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-  //   return creep.memory.role=='carrier' && creep.memory.idle > 0
+  //   return creep.memory.role=='carrier'
   // }})){
   //   idleCarriers += carrier.memory.idle;
   // }
 
   for (let unloader of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-    return creep.memory.role=='unloader' && creep.memory.idle > 0
+    return creep.memory.role=='unloader'
   }})){
     idleUnloaders += unloader.memory.idle;
   }
 
   for (let builder of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-    return creep.memory.role=='builder' && creep.memory.idle > 0
+    return creep.memory.role=='builder'
   }})){
     idleBuilders += builder.memory.idle;
   }
@@ -124,15 +124,20 @@ const RATIO_UNLOADER = 1.5;
   //giving the carriers some sort of idle implementation may be useful to act as a release valve, another could be checking if all the sources in the room are being fully used. Several cases to consider. May also have idle unloaders because the energy is being used for something else, so it shouldn't be cyclical with those classes.
   //TODO base this on larger room context rather than just idle checks
   //TODO this doesn't remotely work
-  if (idleLoaders > 0 && idleUnloaders == 0){
-    spawnUnlaoder(spawner);
-  }
-  else if (idleUnloaders > 0 && idleLoaders == 0){
+
+  // console.log(`idle loaders ${idleLoaders}, idle unloaders: ${idleUnloaders}`)
+
+  if (idleLoaders <= 0){
     spawnLoader(spawner);
   }
-  else if (idleLoaders > 0 && idleUnloaders > 0){
-    spawnCarrier(spawner)
+  else if (idleUnloaders <= 0){
+    spawnUnloader(spawner);
   }
+  else {
+    spawnCarrier(spawner);
+  }
+  return;
+
 
 }
 
@@ -156,8 +161,10 @@ function spawnLoader(spawner){
   }
   else{
     //spawn failed, reset the flag
+    if (flagName){
     Game.flags[flagName].memory.claimed=false;
     Game.flags[flagName].memory.creep=null;
+    }
   }
   return false
 }

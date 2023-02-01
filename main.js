@@ -20,6 +20,8 @@ const technical = require('technical');
 module.exports.loop = function () {
   // technical.giveSourcesMemory()
   //clear memory of dead creeps
+
+
   for(var i in Memory.creeps) {
     if(!Game.creeps[i]) {
       if (Memory.creeps[i].flag){
@@ -39,6 +41,7 @@ module.exports.loop = function () {
   //per-room stuff
   for (var room in Game.rooms){
     roomControl.run(Game.rooms[room]);
+    roomUtilities.checkExploitationStates(Game.rooms[room]);
     var mySpawns = Game.rooms[room].find(FIND_MY_SPAWNS)
     //per-room functions
     if (mySpawns){

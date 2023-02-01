@@ -3,11 +3,26 @@ var sourceUtilities = require('utilities.sources');
 var UPDATE_TIMER = 20;
 
 module.exports = {
+  'checkExploitationStates':checkExploitationStates,
   'checkDevelopmentStates': checkDevelopmentStates,
   'checkRoomUpdateTimer': checkRoomUpdateTimer,
   'isSpaceSafe': isSpaceSafe,
   'printRoomDiagnostics': printRoomDiagnostics,
   'resetRoomUpdateTimer': resetRoomUpdateTimer,
+}
+
+//tracks whether a given source is fully mined each cycle
+//the 'exploited' variable is checked by > 0, is set to 2 so that it must tick down for 2 successive cycles to lose its exploited status
+//TODO incorporate this into all considerations for loaders, ie whether another needs to be spawned
+function checkExploitationStates(room) {
+  for (let source of room.find(FIND_SOURCES)){
+    if (source.energy == 0){
+      source.memory.exploited = 2;
+    }
+    else if (source.ticksToRegeneration == 1){
+      source.memory.exploited -= 1
+    }
+  }
 }
   //these states go 'pending' (not connected yet), 'partial' (ongoing development), 'complete' (roads are finished and has enough Tx (or did at some point))
 function checkDevelopmentStates(room) {
@@ -62,7 +77,7 @@ function checkDevelopmentStates(room) {
 
 
 
-  
+
 function checkRoomUpdateTimer(room){
   if (room.memory.updateTimer==null){
     // spawn.memory.updateTimer = UPDATE_TIMER - 1;

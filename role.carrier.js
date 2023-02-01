@@ -173,6 +173,11 @@ function findDeliverTarget(creep){
 
 function upgradeController(creep){
   if (creep.memory.onSite){
+    creep.memory.compromiseTimer -= 1;
+    if (creep.memory.compromiseTimer == 0){
+      switchJob(creep); //give up and try elsewhere else if it's been waiting for too long
+      return
+    }
     //for now assume it finds a deliver target. there can be a version that gives up and finds another flag, later
     workerUtilities.deliverEnergy(creep, ['unloader'])
     return;

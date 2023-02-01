@@ -23,13 +23,13 @@ Object.defineProperty(Source.prototype, 'memory', {
 
 //could be interesting to modify the "replenish" function but cheaper to have a creep do it. maybe put something in the creep's harvest function here?
 
-if (!Creep.prototype._harvest){
-  Creep.prototype._harvest = Creep.prototype.harvest;
-  Creep.prototype.harvest = function(target){
-    var result = this._harvest(target);
-    if (result == -6){
-      target.memory.devState = 'complete';
-    }
-    return result;
-  }
-}
+// if (!Creep.prototype._harvest){
+//   Creep.prototype._harvest = Creep.prototype.harvest;
+//   Creep.prototype.harvest = function(target){
+//     var result = this._harvest(target);
+//     if (result == -6){
+//       target.memory.devState = 'complete';
+//     }
+//     return result;
+//   }
+// }
