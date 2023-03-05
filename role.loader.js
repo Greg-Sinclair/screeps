@@ -15,10 +15,23 @@ const IDLE_PLUS = 5;
 var roleLoader = {
   /** @param {Creep} creep **/
   run: function (creep) {
-
+    //needs a way to get back if it somehow ends up in a room without a source
     if (!creep.memory.onSite){
       if(!creep.memory.flag){
-        var newFlag = workerUtilities.reserveTxRxFlag(creep, COLOR_ORANGE)
+        var spawn = creep.room.find(FIND_MY_SPAWNS)
+        if (spawn.length > 0){
+          spawn = spawn[0]
+        }
+        else{
+          creep.memory.timeout = 30;
+          return
+        }
+        var source = workerUtilities.findSourceThatNeedsLoader(spawn)
+        if (!source){
+          creep.memory.timeout = 30;
+          return
+        }
+        var newFlag = workerUtilities.reserveTxRxFlag(spawn, source, creep.name, COLOR_ORANGE)
         if (newFlag != null){
           creep.memory.flag = newFlag;
         }

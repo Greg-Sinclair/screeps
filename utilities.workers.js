@@ -9,7 +9,8 @@ module.exports = {
 
   'reserveCxFlag':reserveCxFlag,
   'reserveTxRxFlag':reserveTxRxFlag,
-  'preReserveTxRxFlag':preReserveTxRxFlag,
+  'reserveTxRxFlag':reserveTxRxFlag,
+  'findSourceThatNeedsLoader':findSourceThatNeedsLoader,
   'deliverEnergy':deliverEnergy,
 
 }
@@ -61,6 +62,7 @@ function countAdjacentLoadersUnloaders(flag){
 //this is getting to be a headache. probably better to rebuild the Cx flag handling from scratch
 
 // takes a primary color to search for the corresponding green flag of
+// TODO the cost of this could be significantly reduced by giving the flags themselves a simple way to track whether they have a loader, and whether they are blocking a red flag. These nested queries are likely very expensive
 function reserveCxFlag(creep, color){
 
   if (color == COLOR_YELLOW){
@@ -147,34 +149,10 @@ function reserveCxFlag(creep, color){
   return false;
 }
 
-//adapter to call this via reference to a creep
-function reserveTxRxFlag(creep, color){
-  var spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-  if (!spawn){
-    return false;
-  }
-  return preReserveTxRxFlag(spawn, creep.name, color)
-}
-
-//called before spawning a loader or unloader. finds and claims a flag for that creep (can be done since the creep exists in game.creeps as soon as it's initially spawned). returns the name of the flag so it can be put in that creep's memory
-function preReserveTxRxFlag(spawn, name, color){
-  var target = null;
-  if (color==COLOR_ORANGE){
-    var sources = spawn.room.find(FIND_SOURCES).filter(function(source){
-      return (source.memory.devState == 'partial' || source.memory.devState == 'complete') && roomUtilities.isSpaceSafe(source.pos)
-    });
-    for (var source of sources){
-      if (source.pos.findInRange(FIND_MY_CREEPS,1,{filter:function(creep){
-        return (creep.memory.role=='loader' && creep.memory.idle > 0);
-      }}).length == 0){
-        target = source.pos;
-        break;
-      }
-    }
-  }
-  else if (color==COLOR_YELLOW){
-    target = spawn.room.controller.pos;
-  }
+//reserves a color/red flag of the target for creep with 'name'
+//can be called before actually spawning the creep
+//since it reserves, be sure to dry-run the creep first
+function reserveTxRxFlag(spawn, target, name, color){
   if (target==null){
     return null
   }
@@ -190,6 +168,21 @@ function preReserveTxRxFlag(spawn, name, color){
     return flags[0].name;
   }
   return null;
+}
+
+function findSourceThatNeedsLoader(spawn){
+  if (!spawn){
+    return null;
+  }
+  sources = spawn.room.find(FIND_SOURCES, {filter:function(source){
+    return source.memory.active == true && source.memory.exploited == false;
+  }});
+  if (sources.length == 0){
+    return null;
+  }
+  return sources.sort(function(a,b){
+    return spawn.pos.findPathTo(a.pos).length - spawn.pos.findPathTo(b.pos).length;
+  })[0]
 }
 
 function deliverEnergy(creep, roles){

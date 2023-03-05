@@ -95,11 +95,7 @@ const RATIO_UNLOADER = 1.5;
   let idleMobileBuilders = 0
   let idleBuilders = 0
 
-  for (let loader of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-    return creep.memory.role=='loader'
-  }})){
-    idleLoaders += loader.memory.idle;
-  }
+
 
   // for (let carrier of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
   //   return creep.memory.role=='carrier'
@@ -144,9 +140,11 @@ const RATIO_UNLOADER = 1.5;
 }
 
 
-function spawnLoader(spawner){
+function spawnLoader(spawner, source){
   var name = pickCreepName('Tx');
-  var flagName = workerUtilities.preReserveTxRxFlag(spawner, name, COLOR_ORANGE)
+  if (source == null){
+    var flagName = workerUtilities.reserveTxRxFlag(spawner, source, name, COLOR_ORANGE)
+  }
   var recipe = compileRecipe(
     spawner.room,
     [MOVE,CARRY,WORK],
@@ -172,8 +170,11 @@ function spawnLoader(spawner){
 }
 
 function spawnUnloader(spawner){
+  if (!spawner.room.controller){
+    return false;
+  }
   var name = pickCreepName('Rx');
-  var flagName = workerUtilities.preReserveTxRxFlag(spawner, name, COLOR_YELLOW)
+  var flagName = workerUtilities.reserveTxRxFlag(spawner, spawner.room.controller, name, COLOR_YELLOW)
   var recipe = compileRecipe(
     spawner.room,
     [MOVE,CARRY,WORK],
@@ -184,7 +185,7 @@ function spawnUnloader(spawner){
       role: 'unloader',
       flag: flagName,
       onSite: false,
-      })
+    }),
   })==0){
     return true
   }
@@ -242,6 +243,27 @@ function spawnBuilder(spawner){
   return false;
 }
 
+//====================== META SPAWNING FUNCTIONS =================
+
+//figures out which, if any, of carrier/loader/unloader to spawn
+function spawnSupplyChainCreep(spawn){
+  //loader idle alone is not sufficient to decide whether to spawn a loader. if a source actively needs a loader, then decide whether another loader or one of the others is needed
+  var source = workerUtilities.findSourceThatNeedsLoader(spawn);
+  if (source != null){
+    var idleLoaders = 0;
+    for (let loader of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
+      return creep.memory.role=='loader'
+    }})){
+      idleLoaders += loader.memory.idle;
+    }
+    if (idleLoaders < 0) {
+      //there is room for loaders and many are busy. This implies there are enough carriers, so spawn a loader
+      return spawnLoader(spawn, source)
+    }
+  }
+  // if we get this far we're good on loaders, so either spawn an unloader or a carrier. since the logic on whether the carriers go to spawns or unloaders is up in the air currently, , this cannot be finished until that is settled.
+  //TODO
+}
 
 //====================== HELPER FUNCTIONS ==========================
 

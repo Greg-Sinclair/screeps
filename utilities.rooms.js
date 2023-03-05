@@ -1,9 +1,8 @@
-var sourceUtilities = require('utilities.sources');
+
 
 var UPDATE_TIMER = 20;
 
 module.exports = {
-  'checkExploitationStates':checkExploitationStates,
   'checkDevelopmentStates': checkDevelopmentStates,
   'checkRoomUpdateTimer': checkRoomUpdateTimer,
   'isSpaceSafe': isSpaceSafe,
@@ -12,69 +11,73 @@ module.exports = {
 }
 
 //tracks whether a given source is fully mined each cycle
-//the 'exploited' variable is checked by > 0, is set to 2 so that it must tick down for 2 successive cycles to lose its exploited status
-//TODO incorporate this into all considerations for loaders, ie whether another needs to be spawned
-function checkExploitationStates(room) {
-  for (let source of room.find(FIND_SOURCES)){
-    if (source.energy == 0){
-      source.memory.exploited = 2;
+//used to determine whether a source has enough loaders
+//for now this will be the only metric to determine whether a source is sufficiently developed (and another can be started)
+//there may be a reason to call this outside of the times CDS, ie when a loader reaches its flag, but that amount of latency is probably inconsequential
+function updateExploitationStates(room) {
+  for (let source of room.find(FIND_SOURCES, {filter:function(source){
+    return source.memory.active == true;
+  }})){
+    var harvestCapacity = 0;
+    //first case: the loaders are strong enough to fully harvest it
+    for (let loader of source.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role=='loader'}})){
+      harvestCapacity += loader.getActiveBodyparts(WORK) * 2 //each work part harvests 2 energy per tick
     }
-    else if (source.ticksToRegeneration == 1){
-      source.memory.exploited -= 1
+    if (harvestCapacity * 300 > source.energyCapacity){
+      source.memory.exploited = true;
+      continue;
     }
+    //second case: the loaders aren't strong enough, but all the spaces are taken. hopefully rare. It does raise the question of how a future Medic role should decide whether to just let loaders die
+    if (source.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role=='loader'}}) == source.pos.findInRange(FIND_MY_FLAGS, 1, {filter:function(flag){return flag.secondaryColor == COLOR_RED}})){
+      source.memory.exploited = true;
+      continue;
+    }
+    source.memory.exploited = false;
+
   }
 }
-  //these states go 'pending' (not connected yet), 'partial' (ongoing development), 'complete' (roads are finished and has enough Tx (or did at some point))
+
+//makes sure the flags aren't borked by terrain config
+function checkSourceHasFlags(source){
+  if (source.memory.hasFlags == true){
+    return;
+  }
+  if (source.pos.findInRange(FIND_FLAGS, {filter:function(flag){return flag.pos.findInRange(FIND_FLAGS, {filter:function(flag2){return flag.secondaryColor == COLOR_GREEN;}}).length > 0}}).length == 0){
+    console.log('wtaf is this terrain');
+    console.log('figure out what to do about this');
+    source.memory.hasFlags = false;
+  }
+  else{
+    source.memory.hasFlags = true;
+  }
+}
+
+//decide whether to activate another source, based on the states of the currently active ones
 function checkDevelopmentStates(room) {
-  //for the purposes of these queries, spots with enemies nearby may as well not exist. I don't think that's problematic, though there's some absurd situation where enemies run around and the whole room goes Pending
-  //if there are no developed sources, set the two nearest the spawner to partial (to avoid a situation where the nearest is in a bottleneck and slows initial growth)
-  //there's an insane case where the sources block each other's green flags and can never be completed, but I'm avoiding that for now for the sake of my sanity
-  var partialSources = room.find(FIND_SOURCES).filter(function(source){
-    return source.memory.devState=='partial'&&isSpaceSafe(source.pos)
+  updateExploitationStates(room)
+  var activeSources = room.find(FIND_SOURCES).filter(function(source){
+    return source.memory.active == true;
   });
-  var completeSources = room.find(FIND_SOURCES).filter(function(source){
-    return source.memory.devState=='complete'&&isSpaceSafe(source.pos)
-  });
-
-  if (partialSources.length == 0 && completeSources.length == 0){
-    //same line twice here so that it activates 2
-    var spawn = room.find(FIND_MY_SPAWNS)[0];
-    promoteSourceToPartial(spawn);
-    promoteSourceToPartial(spawn);
+  if (activeSources.length == 0){
+    activateSource(spawn);
+    activateSource(spawn);
+    return
   }
-  //try to keep 2 "partial" sources at all times
-  if (partialSources.length < 2){
-    var spawn = room.find(FIND_MY_SPAWNS)[0];
-    promoteSourceToPartial(spawn);
-  }
-  //audit all the "partial" sources, if there are none left after promote another to partial
-  for (var i in partialSources){
-    sourceUtilities.auditDevelopmentState(partialSources[i]);
-  }
-  // if (partialSources.filter(function(source){
-  //   source.memory.devState == 'partial'
-  // }).length == 0){
-  //it's necessary to re-query this for whatever reason (flattened into an array of names?)
-  if (room.find(FIND_SOURCES).filter(function(source){
-    return source.memory.devState=='partial'&&isSpaceSafe(source.pos)
-  }).length == 0){
-    var promotedSource = room.find(FIND_MY_SPAWNS)[0].pos.findClosestByPath(FIND_SOURCES, {ignoreCreeps:true, filter: function(source){
-      return source.memory.devState!='partial'&&source.memory.devState!='complete'&&isSpaceSafe(source.pos)
-    }})
-    if (promotedSource){
-      promotedSource.memory.devState = 'partial';
-    }
+  if (activeSources.filter(function(source){
+    return source.memory.exploited == false;
+  }).length <= 1) {
+    activateSource(spawn);
   }
 }
 
-function promoteSourceToPartial(spawn){
+function activateSource(spawn){
   var promotedSource = spawn.pos.findClosestByPath(FIND_SOURCES, {ignoreCreeps:true, filter: function(source){
-    return source.memory.devState!='partial'&&source.memory.devState!='complete'&&isSpaceSafe(source.pos)
+    return source.memory.active == false && isSpaceSafe(source.pos)
   }})
   if (!promotedSource){
     return false;
   }
-  promotedSource.memory.devState = 'partial';
+  promotedSource.memory.active = true;
   return true
 }
 
