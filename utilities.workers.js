@@ -174,7 +174,7 @@ function findSourceThatNeedsLoader(spawn){
   if (!spawn){
     return null;
   }
-  sources = spawn.room.find(FIND_SOURCES, {filter:function(source){
+  var sources = spawn.room.find(FIND_SOURCES, {filter:function(source){
     return source.memory.active == true && source.memory.exploited == false;
   }});
   if (sources.length == 0){

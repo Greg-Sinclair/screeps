@@ -9,8 +9,6 @@ var workerUtilities = require('utilities.workers');
 //roles it will automatically pass its yield to
 var rxClasses = ['carrier', 'harvester', 'builderMobile'];
 //define the ratio used to determine how idle a creep is
-const IDLE_MINUS = 1;
-const IDLE_PLUS = 5;
 
 var roleLoader = {
   /** @param {Creep} creep **/

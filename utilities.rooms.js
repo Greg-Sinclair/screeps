@@ -3,6 +3,7 @@
 var UPDATE_TIMER = 20;
 
 module.exports = {
+  'updateExploitationStates': updateExploitationStates,
   'checkDevelopmentStates': checkDevelopmentStates,
   'checkRoomUpdateTimer': checkRoomUpdateTimer,
   'isSpaceSafe': isSpaceSafe,
@@ -54,6 +55,7 @@ function checkSourceHasFlags(source){
 
 //decide whether to activate another source, based on the states of the currently active ones
 function checkDevelopmentStates(room) {
+  var spawn = room.spawns[0]
   updateExploitationStates(room)
   var activeSources = room.find(FIND_SOURCES).filter(function(source){
     return source.memory.active == true;
