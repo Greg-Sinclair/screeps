@@ -11,7 +11,7 @@ var roleBuilder = {
 var creep;
 
 function build(){
-  
+
   if(creep.memory.building && creep.store[RESOURCE_ENERGY] == 0) {
     creep.memory.building = false;
     creep.say('🔄 harvest');
@@ -52,7 +52,7 @@ function build(){
         //needs to sort so that it sticks to one once it finds it
         //should honestly just check it once and save the flag in memory, only look for another if someone claims the current one
         //this is all inefficient
-        var flags = source.pos.findInRange(FIND_FLAGS, {filter:function(flag){
+        var flags = source.pos.find(FIND_FLAGS, {filter:function(flag){
           flag.color == COLOR_ORANGE && flag.secondaryColor == COLOR_RED && flag.memory.claimed != true && !flag.pos.lookFor(LOOK_CREEPS)}})
           //this path thing doesn't seem right
           .sort(function(a,b){return creep.pos.findClosestByPath(b.pos)-creep.pos.findClosestByPath(a.pos)});
@@ -86,7 +86,7 @@ function build(){
         creep.moveTo(energySource);
       }
     }
-    
+
   }
 }
 

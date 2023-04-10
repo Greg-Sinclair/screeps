@@ -1,0 +1,24 @@
+
+
+Grey: roads
+	grey/green: road anchors (top left tile)
+	grey/purple: top left of future intersection
+	grey/brown: other corners of future intersection
+	grey/blue: top left of 3-way intersection (rotated dynamically while drawing, not by flags)
+	grey/white: other corners of 3-way intersection
+
+Yellow: controller
+	yellow/red: unloader flags
+	yellow/green: carrier flags
+
+Orange: source
+	orange/red: loader flags
+	orange/green: carrier flags
+
+Blue: construction
+	blue/blue: heavy builder flag
+	blue/green: carrier flags (to feed heavy builders)
+
+Cyan: future construction sites
+	cyan/orange: extension
+	cyan/yellow: spawn

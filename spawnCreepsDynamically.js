@@ -6,7 +6,7 @@ const DEFAULT_MEMORY = {
   'timeout':0,
   'job':null,
 }
-
+const BUILD_COMPLETION_THRESHOLD = 1000 //ticks
 
 const ENERGY_RATIO_REQUIRED = 1.0
 
@@ -50,101 +50,51 @@ function checkPanicSpawn(spawner){
 }
 */
 
-function chooseCreepToSpawn(spawner){
+function chooseCreepToSpawn(spawn){
   //this may get hairy with multiple spawners, but hopefully time to replenish energy to 100% > spawn time
 
   //if there aren't carriers running, spawn mobile harvesters. otherwise convert the existing ones into mobile builders
 
 const RATIO_LOADER = 1;
 const RATIO_CARRIER = 0.75;
-const RATIO_UNLOADER = 1.5;
+// const RATIO_UNLOADER = 1.5;
 
 //proceeding through this linearly doesn't work since it relies on a given type being maxed out when what's really needed is a good average
   var counts = {};
   //counts number of starting types (loader, carrier, unloader, mobile builder) to decide which to spawn. weighted because there should be 2 carriers per loader. add new types if necessary.
-  counts['loader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length * RATIO_LOADER;
-  counts['carrier'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length * RATIO_CARRIER;
-  counts['unloader'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='unloader')}}).length * RATIO_UNLOADER;
-  // counts['builderMobile'] = spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='builderMobile')}}).length;
-  // var min = Math.min(...Object.values(counts));
+  counts['loader'] = spawn.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='loader')}}).length * RATIO_LOADER;
+  counts['carrier'] = spawn.room.find(FIND_MY_CREEPS, {filter: function(creep){return(creep.memory.role=='carrier')}}).length * RATIO_CARRIER;
   var min = _.min(Object.values(counts));
 
   // idle checks are disabled during setup
 
-  if (min <= 1){
+  if (min <= 3){
     if (counts['loader'] == min){
-      if(spawnLoader(spawner)){
+      if(spawnLoader(spawn)){
         return;
       }
     }
     if (counts['carrier'] == min){
-      if(spawnCarrier(spawner)){
-        return;
-      }
-    }
-    if (counts['unloader'] == min){
-      if(spawnUnloader(spawner)){
+      if(spawnCarrier(spawn)){
         return;
       }
     }
   }
 
-  let idleLoaders = 0
-  // let idleCarriers = 0
-  let idleUnloaders = 0
-  let idleMobileBuilders = 0
-  let idleBuilders = 0
-
-
-
-  // for (let carrier of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-  //   return creep.memory.role=='carrier'
-  // }})){
-  //   idleCarriers += carrier.memory.idle;
-  // }
-
-  for (let unloader of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-    return creep.memory.role=='unloader'
-  }})){
-    idleUnloaders += unloader.memory.idle;
+  // spawn a builder depending on the eta of current projects
+  if (buildCompletionTime(spawn.room) > BUILD_COMPLETION_THRESHOLD){
+    if (spawnBuilder(spawn)){
+      return;
+    }
   }
-
-  for (let builder of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-    return creep.memory.role=='builder'
-  }})){
-    idleBuilders += builder.memory.idle;
-  }
-  //the idle setup also has some nasty cases where the creeps are just stuck for whatever reason and bork the idle totals for the others. ensuring that they can't update idle in those cases is necessary (and probably already the case for the current creeps). It should explicitly check an action that either does idle+ or idle-, rather than kicking to idle+ at the end of the function.
-
-  // console.log(`idle loaders: ${idleLoaders}, idle unloaders: ${idleUnloaders}`)
-  //use the idle count for loader and unloader to decide which of loader/unloader/carrier to spawn
-  //if one but not the other is idle, it means the other is overworked
-  //giving the carriers some sort of idle implementation may be useful to act as a release valve, another could be checking if all the sources in the room are being fully used. Several cases to consider. May also have idle unloaders because the energy is being used for something else, so it shouldn't be cyclical with those classes.
-  //TODO base this on larger room context rather than just idle checks
-  //TODO this doesn't remotely work
-
-  // console.log(`idle loaders ${idleLoaders}, idle unloaders: ${idleUnloaders}`)
-
-  if (idleLoaders <= 0){
-    spawnLoader(spawner);
-  }
-  else if (idleUnloaders <= 0){
-    spawnUnloader(spawner);
-  }
-  else {
-    spawnCarrier(spawner);
-  }
-  return;
-
+  spawnSupplyChainCreep(spawn)
 
 }
 
 
-function spawnLoader(spawner, source){
+function spawnLoader(spawner){
   var name = pickCreepName('Tx');
-  if (source == null){
-    var flagName = workerUtilities.reserveTxRxFlag(spawner, source, name, COLOR_ORANGE)
-  }
+  var flagName = workerUtilities.reserveTxRxFlag(spawner, null, name, COLOR_ORANGE)
   var recipe = compileRecipe(
     spawner.room,
     [MOVE,CARRY,WORK],
@@ -175,6 +125,9 @@ function spawnUnloader(spawner){
   }
   var name = pickCreepName('Rx');
   var flagName = workerUtilities.reserveTxRxFlag(spawner, spawner.room.controller, name, COLOR_YELLOW)
+  if (flagName == null){
+    return false; //it's possible that there are no open spots around the controller
+  }
   var recipe = compileRecipe(
     spawner.room,
     [MOVE,CARRY,WORK],
@@ -249,23 +202,69 @@ function spawnBuilder(spawner){
 function spawnSupplyChainCreep(spawn){
   //loader idle alone is not sufficient to decide whether to spawn a loader. if a source actively needs a loader, then decide whether another loader or one of the others is needed
   var source = workerUtilities.findSourceThatNeedsLoader(spawn);
-  if (source != null){
-    var idleLoaders = 0;
-    for (let loader of spawner.room.find(FIND_MY_CREEPS, {filter: function(creep){
-      return creep.memory.role=='loader'
-    }})){
-      idleLoaders += loader.memory.idle;
-    }
-    if (idleLoaders < 0) {
-      //there is room for loaders and many are busy. This implies there are enough carriers, so spawn a loader
+  let idleLoaders = 0
+  let idleUnloaders = 0
+  for (let loader of spawn.room.find(FIND_MY_CREEPS, {filter: function(creep){
+    return creep.memory.role=='loader'
+  }})){
+    idleLoaders += loader.memory.idle;
+  }
+
+  for (let unloader of spawn.room.find(FIND_MY_CREEPS, {filter: function(creep){
+    return creep.memory.role=='unloader'
+  }})){
+    idleUnloaders += unloader.memory.idle;
+  }
+  /*
+  2 cases to acknowledge here:
+  -loaders are not at full capacity, so a mix of loaders/unloaders/carriers is needed
+  -loaders are at full capacity, so infinitely spawning more unloaders/carriers will eventually be excessive
+  */
+ // ! the trigger for spawning an unloader seems a little haphazard
+  if (source != null) {
+    if (idleLoaders <= 0){
       return spawnLoader(spawn, source)
     }
+    else if (idleUnloaders <= 0){
+      return spawnUnloader(spawn)
+    }
+    else{
+      return spawnCarrier(spawn)
+    }
   }
-  // if we get this far we're good on loaders, so either spawn an unloader or a carrier. since the logic on whether the carriers go to spawns or unloaders is up in the air currently, , this cannot be finished until that is settled.
-  //TODO
+  else{
+    //we already have the maximum number of loaders, so gotta figure out how many carriers is excessive.
+    //the only real metric is whether the loaders are the bottleneck of not
+    if (idleUnloaders <= 0){
+      return spawnUnloader(spawn)
+    }
+    else if (idleLoaders > 0){
+      return spawnCarrier(spawn)
+    }
+  }
 }
 
 //====================== HELPER FUNCTIONS ==========================
+
+// figure out the best-case completion time for the room's structures (assume the workers do nothing but work)
+//returns the number of ticks needed to finish everything
+function buildCompletionTime(room){
+  let throughput = 0
+  for (let builder of room.find(FIND_MY_CREEPS, {filter:function(creep){
+    return creep.memory.role == 'builder'
+  }})){
+    throughput += builder.body.filter(x => x===WORK).length * 5;
+  }
+  if (throughput == 0){return null}
+  let energyNeeded = 0
+  for (let site of room.find(FIND_MY_CONSTRUCTION_SITES)){
+    energyNeeded += site.progressTotal - site.progress
+  }
+  return energyNeeded / throughput
+}
+
+
+
 
 function pickCreepName(template){
   var n=1;
@@ -290,7 +289,7 @@ function compileRecipe(room,base,repeating){
   if (repeatingCost==0){
     return recipe;
   }
-  while (cost <= maxCost - repeatingCost){
+  while (cost <= maxCost - repeatingCost && recipe.length < MAX_CREEP_SIZE){
     for (let ingredient of repeating){
         recipe.push(ingredient);
     }

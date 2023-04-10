@@ -63,30 +63,5 @@ var roleUnloader = {
   }
 }
 
-//seeing as creeps can move through each other diagonally, this isn't currently needed. might need to revisit if formations get weirder in the future. if so, creeps should be prevented from choosing flags they can't reach during setup (or a new creep will reserve this flag and prevent another from moving to it)
-
-// function checkForGapFlag(creep){
-//   checkFlagIsReachable(creep.room.lookForAt(LOOK_FLAGS, creep.x, creep.y-1), creep);
-//   checkFlagIsReachable(creep.room.lookForAt(LOOK_FLAGS, creep.x, creep.y+1), creep);
-//   checkFlagIsReachable(creep.room.lookForAt(LOOK_FLAGS, creep.x-1, creep.y), creep);
-//   checkFlagIsReachable(creep.room.lookForAt(LOOK_FLAGS, creep.x+1, creep.y), creep);
-
-// }
-// function checkFlagIsReachable(flag, creep){
-//   //assume all spawners are connected
-//   if (flag.length == 0){
-//     return
-//   }
-//   flag = flag[0]
-//   if (flag.color == COLOR_YELLOW && flag.secondaryColor == COLOR_RED && flag.memory.claimed != true){
-//     var spawner = creep.room.find(FIND_MY_SPAWNS)[0]
-//     console.log(`flag is ${flag}`)
-//     console.log(`spawner is ${spawner}`)
-//     if (!findPath(flag.pos, spawner.pos)){
-//       console.log(`found blocked flag: ${flag}`)
-//     }
-//   }
-
-// }
 
 module.exports = roleUnloader;

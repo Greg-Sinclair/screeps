@@ -22,14 +22,14 @@ function updateExploitationStates(room) {
     var harvestCapacity = 0;
     //first case: the loaders are strong enough to fully harvest it
     for (let loader of source.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role=='loader'}})){
-      harvestCapacity += loader.getActiveBodyparts(WORK) * 2 //each work part harvests 2 energy per tick
+      harvestCapacity += loader.getActiveBodyparts(WORK) * HARVEST_POWER
     }
     if (harvestCapacity * 300 > source.energyCapacity){
       source.memory.exploited = true;
       continue;
     }
     //second case: the loaders aren't strong enough, but all the spaces are taken. hopefully rare. It does raise the question of how a future Medic role should decide whether to just let loaders die
-    if (source.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role=='loader'}}) == source.pos.findInRange(FIND_MY_FLAGS, 1, {filter:function(flag){return flag.secondaryColor == COLOR_RED}})){
+    if (source.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role=='loader'}}) == source.pos.findInRange(FIND_FLAGS, 1, {filter:function(flag){return flag.secondaryColor == COLOR_RED}})){
       source.memory.exploited = true;
       continue;
     }
@@ -43,7 +43,7 @@ function checkSourceHasFlags(source){
   if (source.memory.hasFlags == true){
     return;
   }
-  if (source.pos.findInRange(FIND_FLAGS, {filter:function(flag){return flag.pos.findInRange(FIND_FLAGS, {filter:function(flag2){return flag.secondaryColor == COLOR_GREEN;}}).length > 0}}).length == 0){
+  if (source.pos.findInRange(FIND_FLAGS, 1, {filter:function(flag){return flag.pos.findInRange(FIND_FLAGS, 1, {filter:function(flag2){return flag.secondaryColor == COLOR_GREEN;}}).length > 0}}).length == 0){
     console.log('wtaf is this terrain');
     console.log('figure out what to do about this');
     source.memory.hasFlags = false;
@@ -55,7 +55,12 @@ function checkSourceHasFlags(source){
 
 //decide whether to activate another source, based on the states of the currently active ones
 function checkDevelopmentStates(room) {
-  var spawn = room.spawns[0]
+  if (room.memory.allSourcesActive){return;}
+  var spawns = room.find(FIND_MY_SPAWNS)
+  if (spawns.length == 0){
+    return;
+  }
+  var spawn = spawns[0];
   updateExploitationStates(room)
   var activeSources = room.find(FIND_SOURCES).filter(function(source){
     return source.memory.active == true;
@@ -70,16 +75,21 @@ function checkDevelopmentStates(room) {
   }).length <= 1) {
     activateSource(spawn);
   }
+  if (room.find(FIND_SOURCES, {filter: function(source){return source.memory.active!=true}}).length==0){
+    room.memory.allSourcesActive = true;
+    return;
+  }
 }
 
 function activateSource(spawn){
   var promotedSource = spawn.pos.findClosestByPath(FIND_SOURCES, {ignoreCreeps:true, filter: function(source){
-    return source.memory.active == false && isSpaceSafe(source.pos)
+    return source.memory.active != true && isSpaceSafe(source.pos)
   }})
   if (!promotedSource){
     return false;
   }
   promotedSource.memory.active = true;
+  console.log('activating source')
   return true
 }
 

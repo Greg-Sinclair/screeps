@@ -9,7 +9,6 @@ module.exports = {
 
   'reserveCxFlag':reserveCxFlag,
   'reserveTxRxFlag':reserveTxRxFlag,
-  'reserveTxRxFlag':reserveTxRxFlag,
   'findSourceThatNeedsLoader':findSourceThatNeedsLoader,
   'deliverEnergy':deliverEnergy,
 
@@ -154,14 +153,19 @@ function reserveCxFlag(creep, color){
 //since it reserves, be sure to dry-run the creep first
 function reserveTxRxFlag(spawn, target, name, color){
   if (target==null){
-    return null
+    target = findSourceThatNeedsLoader(spawn);
+    if (target == null){return null;}
   }
-  var flags = target.findInRange(FIND_FLAGS,1,{filter:function(flag){
+  var flags = target.pos.findInRange(FIND_FLAGS,1,{filter:function(flag){
     return flag.color==color &&
       flag.secondaryColor==COLOR_RED &&
       flag.memory.claimed!=true
-  //sort to pick the furthest flag which is part of that source/controller. this is to avoid bottlenecking in a rare case
-  }}).sort(function(a,b){return spawn.pos.findPathTo(b).length - spawn.pos.findPathTo(a).length});
+  //sort to pick the furthest flag which is part of that source/controller. this is to avoid bottlenecking in a rare case. tiebreaker is the number of adjacent creeps
+  }}).sort(function(a,b){
+    let dA = spawn.pos.findPathTo(a).length
+    let dB = spawn.pos.findPathTo(b).length
+    return dA < dB ? 1: dA > dB ? -1 : a.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role==(color==COLOR_YELLOW ? 'unloader':'loader')}}) -  a.pos.findInRange(FIND_MY_CREEPS, 1, {filter:function(creep){return creep.memory.role==(color==COLOR_YELLOW ? 'unloader':'loader')}});
+  });
   if (flags.length > 0) {
     flags[0].memory.claimed = true;
     flags[0].memory.creep = name;
@@ -175,7 +179,9 @@ function findSourceThatNeedsLoader(spawn){
     return null;
   }
   var sources = spawn.room.find(FIND_SOURCES, {filter:function(source){
-    return source.memory.active == true && source.memory.exploited == false;
+    return source.memory.active == true && source.memory.exploited == false && source.pos.findInRange(FIND_FLAGS, 1, {filter:function(flag){
+      return flag.memory.claimed != true && flag.color == COLOR_ORANGE && flag.secondaryColor == COLOR_RED
+    }}).length > 0;
   }});
   if (sources.length == 0){
     return null;

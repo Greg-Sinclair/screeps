@@ -2,10 +2,12 @@
 //roles
 const roleHarvester = require("role.harvester");
 const roleBuilder = require("role.builder");
-const roomControl = require("roomControl");
 const roleCarrier = require("role.carrier");
 const roleLoader = require("role.loader");
 const roleUnloader = require("role.unloader");
+
+const roomControl = require("control.room");
+const constructionControl = require("control.construction");
 
 //spawn logic
 const spawnCreepsDynamically = require("spawnCreepsDynamically");
@@ -21,6 +23,12 @@ module.exports.loop = function () {
   // technical.giveSourcesMemory()
   //clear memory of dead creeps
 
+  if (!Game.rooms['sim'].memory.constructionFlags){
+    Game.rooms['sim'].memory.constructionFlags = true;
+    constructionControl.run(Game.rooms['sim'])
+  }
+
+  return;
 
   for(var i in Memory.creeps) {
     if(!Game.creeps[i]) {
@@ -41,6 +49,7 @@ module.exports.loop = function () {
   //per-room stuff
   for (var room in Game.rooms){
     roomControl.run(Game.rooms[room]);
+
     roomUtilities.updateExploitationStates(Game.rooms[room]);
     var mySpawns = Game.rooms[room].find(FIND_MY_SPAWNS)
     //per-room functions

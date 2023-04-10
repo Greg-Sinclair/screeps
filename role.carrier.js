@@ -195,10 +195,19 @@ function upgradeController(creep){
   else{
     creep.moveTo(flag.pos);
   }
-
-
-
-
 }
+
+// function deliverToExtensions(creep){
+// //ensure it's actually entered the facility
+
+//   //look for directly adjacent extensions
+
+//   let extensions = creep.room.lookForAtArea(LOOK_STRUCTURES, creep.pos.y-1,creep.pos.x-1,creep.pos.y+1,creep.pos.x+1, true)
+//   for (let extension of extensions){
+//     creep.transfer(extension.extension, RESOURCE_ENERGY)
+//   }
+// }
+
+
 
 module.exports = roleCarrier;

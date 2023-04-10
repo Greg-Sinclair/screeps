@@ -141,6 +141,10 @@ function drawRoad(start, target){
 
 function queueConstructions(spawn){
 
+  //only queue a new batch of stuff once the original is finished
+  // the time between work being finished and new stuff spawning in is pretty harmless since walls can be endlessly reinforced.
+  if (spawn.room.find(FIND_MY_CONSTRUCTION_SITES).length > 0){return;}
+
   var controller = spawn.room.controller;
   //ignore sources that aren't safe
 
@@ -200,6 +204,13 @@ function queueConstructions(spawn){
 
 
 }
+
+function drawRoadsToSources(spawn){
+  let sources = spawn.room.find(FIND_SOURCES, {filter:function(source){
+    return source.memory.active == true;
+  }})
+}
+
 
 function placeExtension(source){
   //try all spots in an expanding grid around the source. make sure that there is a road queued already so that it won't be entirely blocked off
