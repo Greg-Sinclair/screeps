@@ -39,9 +39,9 @@ function drawRoadToSource(){
 
 //takes 2 positions, draws roads between them, exclusive
 //returns true or false. if true, update the road status of the source
-function drawRoadWithFlags(start, end){
+function drawRoadWithFlags(start, target){
   let path = start.findPathTo(target, {ignoreCreeps:true});
-  for (let i = 1; i <= path.length-2; i++){
+  for (let i = 1; i < path.length-1; i++){
     if (roomUtilities.isSpaceSafe(new RoomPosition(path[i].x, path[i].y, start.room.name))==false){
       return true;
       //this is so that it doesn't queue anything up past the enemy
@@ -77,6 +77,13 @@ function drawRoad(x,y){
 		return;
 	}
 	room.createConstructionSite(x,y,STRUCTURE_ROAD);
+}
+
+function queueRoad(start, end){
+  let path = start.findPathTo(target, {ignoreCreeps:true});
+  for (let i = 1; i < path.length-1; i++){
+    room.createFlag(path[i].x, path[i].y, null, COLOR_GREY, COLOR_GREEN);
+  }
 }
 
 function placeFlag(x,y){
@@ -305,10 +312,10 @@ function surveyRoom(){
 
 function createCornerFlags(x,y,width,height){
   console.log(`FLAG ${x}, ${y}`)
-  console.log(room.createFlag(x,y,null,COLOR_GREY,COLOR_PURPLE))
+  console.log(room.createFlag(x,y,null,COLOR_GREY,COLOR_ORANGE))
   room.createFlag(x+width-1,y,null,COLOR_GREY,COLOR_BROWN);
-  room.createFlag(x,y+height-1,null,COLOR_GREY,COLOR_BROWN);
-  room.createFlag(x+width-1,y+height-1,null,COLOR_GREY,COLOR_BROWN);
+  room.createFlag(x,y+height-1,null,COLOR_GREY,COLOR_GREY);
+  room.createFlag(x+width-1,y+height-1,null,COLOR_GREY,COLOR_WHITE);
 }
 
 //takes the top left corner and checks if there are walls in the indicated space
@@ -319,7 +326,7 @@ function checkOpenArea(x,y,width,height){
   //later on, a small but nonzero result may be workable by eliminating some extensions
   for (let i = 0; i < width; i++){
     for (let j = 0; j < height; j++){
-      if (terrain.get(x+i,y+j) == TERRAIN_MASK_WALL){
+      if (terrain.get(x+i,y+j) == TERRAIN_MASK_WALL && room.lookForAt(LOOK_STRUCTURES, i, j).length==0){
         result += 1;
         rightMostWall = Math.max(rightMostWall,i);
         bottomMostWall = Math.max(bottomMostWall,j);
@@ -331,6 +338,59 @@ function checkOpenArea(x,y,width,height){
     'rightMostWall':rightMostWall,
     'bottomMostWall':bottomMostWall,
   }
+}
+
+//given a flag and a target, get the corresponding flag in that direction
+//direction: 0-3
+function findCorrespondingCornerFlag(startFlag, direction){
+  //use the objective values of the color constants to determine which corner we're starting from
+  //orange = 7 and so on. this will break if the colors are changed
+  let start = startFlag.secondaryColor - 7
+  if (start == direction){
+    return startFlag;
+  }
+  //determine the offset from one corner to another using XOR
+  let dx=0;
+  let dy=0;
+  if (start < 2 ^ direction < 2){
+    dy = height;
+  }
+  if (start % 2 ^ direction % 2){
+    dx = width;
+  }
+  let targetFlags = room.lookForAt(LOOK_FLAGS, startFlag.pos.x+dx, startFlag.pos.y+dy, {filter:{
+    color:COLOR_GREY,
+    secondaryColor:direction+7
+  }})
+  if (targetFlags.length > 0){
+    return targetFlags[0];
+  }
+  console.error('No corresponding corner flag found')
+  return None;
+}
+
+function findAllCorrespondingCornerFlags(startFlag){
+  let start = startFlag.secondaryColor - 7
+  result = [startFlag] //will return all 4 flags
+  let dx = width;
+  let dy = height;
+  if (start % 2 == 1){
+    dx *= -1
+  }
+  if (start > 2){
+    dy *= -1
+  }
+  //uses nullish coalescing to avoid checking array.length > 0
+  result.push(room.lookForAt(LOOK_FLAGS, startFlag.pos.x+dx, startFlag.pos.y, {filter:function(flag){
+    return flag.color == COLOR_GREY && flag.secondaryColor >= 7
+  }})?.[0] ?? null);
+  result.push(room.lookForAt(LOOK_FLAGS, startFlag.pos.x, startFlag.pos.y+dy, {filter:function(flag){
+    return flag.color == COLOR_GREY && flag.secondaryColor >= 7
+  }})?.[0] ?? null);
+  result.push(room.lookForAt(LOOK_FLAGS, startFlag.pos.x+dx, startFlag.pos.y+dy, {filter:function(flag){
+    return flag.color == COLOR_GREY && flag.secondaryColor >= 7
+  }})?.[0] ?? null);
+  return result.filter(item=>item!==null);
 }
 
 /*
@@ -370,12 +430,13 @@ function drawIntersection(pos){
       }
     }
   }
+  //! anchors not used currently
   //place anchor flags for future roads
   //anchor flags always go on the top-left road chunk
-  room.createFlag(pos.x, pos.y, null, COLOR_GREY, COLOR_GREEN)
-  room.createFlag(pos.x+width-1, pos.y, null, COLOR_GREY, COLOR_GREEN)
-  room.createFlag(pos.x, pos.y+height-2, null, COLOR_GREY, COLOR_GREEN)
-  room.createFlag(pos.x+width-2, pos.y.height-1, null, COLOR_GREY, COLOR_GREEN)
+  // room.createFlag(pos.x, pos.y, null, COLOR_GREY, COLOR_GREEN)
+  // room.createFlag(pos.x+width-1, pos.y, null, COLOR_GREY, COLOR_GREEN)
+  // room.createFlag(pos.x, pos.y+height-2, null, COLOR_GREY, COLOR_GREEN)
+  // room.createFlag(pos.x+width-2, pos.y.height-1, null, COLOR_GREY, COLOR_GREEN)
 
   //place flags for builders in the middle. since it's 6x6, they can stand in the middle and build the whole thing
   //next to each other diagonally to not obstruct creeps. Since the container is walkable, the carrier can stand on it while it's built
@@ -385,6 +446,70 @@ function drawIntersection(pos){
 
   room.createConstructionSite(pos.x+x+Math.floor(width/2), pos.y+y+Math.floor(height/2), STRUCTURE_CONTAINER);
 }
+
+//once the intersections are placed, try to connect them. this will be tricky, a tree traversal solution looks like the way to go, beginning at the controller
+function connectIntersectionCorners(){
+  let start = room.controller.pos
+  //might be better to keep the corners as RoomPositions in memory and do all this in one shot, but for now
+  let end = start.findClosestByPath(FIND_FLAGS, {filter:function(flag){
+    return flag.color == COLOR_GREY && flag.secondaryColor >= 7
+  }})
+  if (end.length > 0) end=end[0];
+  //ignoring the 2-lane roads for now, that can be handled later in several ways
+  queueRoad(start, end);
+  start = end
+
+  //we're currently at the intersection corner nearest to the controller. it's possible to imagine a room configuration where the controller should have roads to multiple intersections, but for now recursively try to connect all sources
+}
+
+//recursive function that tries to connect all intersections
+//for the first recursive pass it will be a minimal tree (only tries to connect to things that are not connected)
+function extendIntersectionCorner(start){
+  let corners = findAllCorrespondingCornerFlags(start);
+  for (let corner of corners){
+
+  }
+}
+
+function setIntersectionConnectedState(flag){
+  findCorrespondingCornerFlag(flag,0).memory.connected = true;
+}
+
+function checkIntersectionConnectedState(flag){
+  return findCorrespondingCornerFlag(flag,0).memory.connected == true;
+}
+
+//each intersection will track the flag which can connect it to the controller by the shortest path. djikstra's algorithm
+function updateIntersectionQuote(flag, value){
+  if (flag.memory.quote==undefined || flag.memory.quote > value){
+    flag.memory.quote = value;
+    flag.memory.quoteFlag = quoteFlag;
+  }
+}
+
+//! using a djikstra implementation
+//flag.memory.quote (int)
+//flag.memory.quoteFlag (flag)
+//flag.memory.distanceFromController (int)
+
+//if for whatever reason multiple corners are connected to the controller, ensure that routing between them is taken into account
+function auditCornersDistanceFromController(flag){
+  let corners = findAllCorrespondingCornerFlags(flag)
+  if (corners.length==0) return;
+  let values = []
+  for (let corner of corners){
+    values.push(corner.memory.distanceFromController)
+  }
+  values = values.filter(item=>item!==undefined)
+  //! this won't work because width!=height
+  let min = _.min(values)
+  if (min < _.max(values)){
+    for (let corner of corners){
+      corner.memory.distanceFromController = min;
+    }
+  }
+}
+
 
 function connectRoadToPoint(start, end){
   //start is a grey/green anchor flag's position, end is any position

@@ -1,11 +1,12 @@
 
 
 Grey: roads
-	grey/green: road anchors (top left tile)
-	grey/purple: top left of future intersection
-	grey/brown: other corners of future intersection
-	grey/blue: top left of 3-way intersection (rotated dynamically while drawing, not by flags)
-	grey/white: other corners of 3-way intersection
+	grey/green: future roads
+	grey/orange: top left of future intersection
+	grey/brown: top right of future intersection
+	grey/grey: bottom left of future intersection
+	grey/white: bottom right of future intersection
+	(3-way intersection will just exclude one of these flags, can be checked dynamically)
 
 Yellow: controller
 	yellow/red: unloader flags
